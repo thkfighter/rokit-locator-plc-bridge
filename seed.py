@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# File: 
+# File: seed.py
 # Created On: 2023-03-27
-# Copyright © 2023 Bosch Rexroth AG
+# Copyright (c) 2023 Shanghai Bosch Rexroth Hydraulics & Automation Ltd.
 #
 
 import socket
 import sys
 import struct
 import argparse
-# import math
-# import csv
 from datetime import datetime
 import time
 import requests
