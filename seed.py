@@ -12,16 +12,17 @@ import struct
 import argparse
 from datetime import datetime
 import time
+import logging
 import requests
 import snap7
-from signal import signal, SIGINT
-import logging
 logger = logging.getLogger(__name__)
 
 now = datetime.now()
 date_time = now.strftime("%d-%m-%Y-%H-%M-%S")
 
 # Locator
+user_name = "admin"
+password = "123456"
 LOCATOR_ADDRESS = '127.0.0.1'
 LOCATOR_BINARY_PORT = 9011
 
@@ -36,9 +37,9 @@ sessionId = ''  # ROKIT Locator JSON RPC session ID
 
 # Siemens S7-1200
 PLC_ADDRESS = "192.168.8.21"
+PLC_PORT = 102
 PLC_RACK = 0
 PLC_SLOT = 1
-PLC_PORT = 102
 seed_num = 8 # number of seeds stored in DB
 DB_NUMBER = 1 # Siemens S7 data block number
 ROW_SIZE = 28 # bytes that a row/seed resides
@@ -123,7 +124,6 @@ def sessionLogin() -> str:
     headers = {
         'Content-Type': 'application/json; charset=utf-8',
     }
-
     payload = {
         "id": 101,
         "jsonrpc": "2.0",
@@ -135,8 +135,8 @@ def sessionLogin() -> str:
                     "time": 60, # Integer64
                     "resolution": 1 # real_time = time / resolution
                 },
-                "userName": "admin",
-                "password": "bbZGs3wFsB35"
+                "userName": user_name,
+                "password": password
             }
         }
     }
