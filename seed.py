@@ -36,12 +36,12 @@ print(datetime.now())
 sessionId = ''  # ROKIT Locator JSON RPC session ID
 
 # Siemens S7-1200
-PLC_ADDRESS = "192.168.8.21"
+PLC_ADDRESS = "192.168.0.235"
 PLC_PORT = 102
 PLC_RACK = 0
 PLC_SLOT = 1
 seed_num = 8 # number of seeds stored in DB
-DB_NUMBER = 1 # Siemens S7 data block number
+DB_NUMBER = 10000 # Siemens S7 data block number
 ROW_SIZE = 28 # bytes that a row/seed resides
 POSE_SIZE = 24 # bytes that Pose2D resides in a row/seed
 # row/seed specification in a data block
@@ -212,7 +212,7 @@ def run():
                                 
                 pose_ba = struct.pack('>ddd', pose['x'], pose['y'], pose['yaw'])
                 client.db_write(
-                    db_number=1,
+                    db_number=DB_NUMBER,
                     start=i*ROW_SIZE+2,
                     # data=pose_ba+bytearray([0b00000000])
                     data=pose_ba
@@ -220,7 +220,7 @@ def run():
 
                 # reset recordSeed
                 client.db_write(
-                    db_number=1,
+                    db_number=DB_NUMBER,
                     start=i*ROW_SIZE+2+POSE_SIZE,
                     data=bytearray([0b00000000])
                 )
@@ -236,7 +236,7 @@ def run():
                 print(f"Seed {i} set.")
 
                 client.db_write(
-                    db_number=1,
+                    db_number=DB_NUMBER,
                     start=i*ROW_SIZE+2+POSE_SIZE,
                     data=bytearray([0b00000000])
                 )
