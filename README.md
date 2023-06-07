@@ -13,8 +13,8 @@ seed.py是ROKIT Locator位姿（坐标和方向）初始化的示例程序，主
 
 位姿初始化的方法：
 1. 移动车辆，让它自动初始化位姿。
-2. 
-3. 
+2. 在aXessor上手动初始化位姿。
+3. 通过API clientLocalizationSetSeed.
 
 示例使用的PLC为西门子S7 1200. TODO
 
