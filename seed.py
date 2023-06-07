@@ -92,7 +92,7 @@ def readCurrentPoseFromLocator() -> dict:
     return jsonRow
 
 
-def setSeedJsonRpc(sessionId: str, x: float, y: float, a: float, enforceSeed: bool = False, uncertainSeed: bool = False):
+def clientLocalizationSetSeed(sessionId: str, x: float, y: float, a: float, enforceSeed: bool = False, uncertainSeed: bool = False):
     headers = {
         'Content-Type': 'application/json; charset=utf-8',
     }
@@ -258,7 +258,7 @@ def recordSeed(station: int):
 def setSeed(x, y, a, enforceSeed, uncertainSeed):
     sessionId = sessionLogin()
     print(sessionId)
-    setSeedJsonRpc(sessionId=sessionId, x=x, y=y, a=a, 
+    clientLocalizationSetSeed(sessionId=sessionId, x=x, y=y, a=a, 
                    enforceSeed=enforceSeed, 
                    uncertainSeed=uncertainSeed)
     sessionLogout(sessionId)
