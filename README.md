@@ -1,6 +1,6 @@
 # locator_plc_bridge
 
-## 介绍
+## 位姿初始化介绍
 
 seed.py是ROKIT Locator位姿（坐标和方向）初始化的示例程序，主要使用Locator API的ClientLocalizationPoseDatagram和clientLocalizationSetSeed.
 
@@ -16,29 +16,15 @@ seed.py是ROKIT Locator位姿（坐标和方向）初始化的示例程序，主
 2. 在aXessor上手动初始化位姿。
 3. 通过API clientLocalizationSetSeed.
 
-示例使用的PLC为西门子S7 1200. TODO
+seed.py使用的PLC为西门子S7 1200. 程序通过ClientLocalizationPose读取Locator的定位数据，存储于PLC的数据块. 当车辆重启时，程序通过clientLocalizationSetSeed给车辆初始位姿。
 
-relay.py将ROKIT Locator从端口9011发出的位姿数据转发到指定端口9511，并且可以降低发送频率。
-
-## 软件架构
-软件架构说明
-
+## 数据转发
+relay.py将ROKIT Locator从端口9011发出的位姿数据转发到指定端口9511，并且可以降低发送频率。此程序是用来解决西门子S7 1200 TCP通讯数据处理能力不足的问题。
 
 ## 安装教程
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+
 
 ## 使用说明
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
 
-## 参与贡献
-
-1.  Fork 本仓库
-2.  新建 Feat_xxx 分支
-3.  提交代码
-4.  新建 Pull Request
