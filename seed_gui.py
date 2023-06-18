@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 # File: seed.py
-# Created On: 2023-03-27
+# Created On: 2023-06-18
 # Copyright (c) 2023 Shanghai Bosch Rexroth Hydraulics & Automation Ltd.
 #
 
@@ -14,7 +14,10 @@ from datetime import datetime
 import time
 import logging
 import requests
-import snap7
+# import snap7
+import sqlite3
+import PySimpleGUI as sg
+
 logger = logging.getLogger(__name__)
 
 now = datetime.now()
@@ -23,45 +26,26 @@ date_time = now.strftime("%d-%m-%Y-%H-%M-%S")
 # Locator
 user_name = "admin"
 password = "123456"
-LOCATOR_ADDRESS = '127.0.0.1'
-LOCATOR_BINARY_PORT = 9011
+locator_ip = '127.0.0.1'
+locator_pose_port = 9011
 
-LOCATOR_JSON_RPC_PORT = 8080
-URL = 'http://'+LOCATOR_ADDRESS+':' + str(LOCATOR_JSON_RPC_PORT)
+locator_json_rpc_port = 8080
+url = 'http://'+locator_ip+':' + str(locator_json_rpc_port)
 
 # ClientLocalizationPoseDatagram data structure (see API manual)
-UNPACKER = struct.Struct('<ddQiQQddddddddddddddQddd')
+unpacker = struct.Struct('<ddQiQQddddddddddddddQddd')
 print(datetime.now())
 
-sessionId = ''  # ROKIT Locator JSON RPC session ID
-
-# Siemens S7-1200
-PLC_ADDRESS = "192.168.0.235"
-PLC_PORT = 102
-PLC_RACK = 0
-PLC_SLOT = 1
-seed_num = 8  # number of seeds stored in DB
-DB_NUMBER = 10000  # Siemens S7 data block number
-ROW_SIZE = 28  # bytes that a row/seed resides
-POSE_SIZE = 24  # bytes that Pose2D resides in a row/seed
-# row/seed specification in a data block
-layout = """
-0.0     enforceSeed         BOOL
-0.1     uncertainSeed       BOOL
-2       x                   LREAL
-10      y                   LREAL
-18      a                   LREAL
-26.0    recordSeed          BOOL
-26.1    setSeed             BOOL
-"""
+id = 0
+session_id = ''  # ROKIT Locator JSON RPC session ID
 
 
-def readCurrentPoseFromLocator() -> dict:
+def client_localization_pose() -> dict:
     # Creating a TCP/IP socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     # Connecting to the server
-    server_address = (LOCATOR_ADDRESS, LOCATOR_BINARY_PORT)
+    server_address = (locator_ip, locator_pose_port)
 
     print('connecting to Locator %s : %s ...' % (server_address))
     try:
@@ -73,9 +57,9 @@ def readCurrentPoseFromLocator() -> dict:
         return
 
     # read the socket
-    data = sock.recv(UNPACKER.size)
+    data = sock.recv(unpacker.size)
     # upack the data (= interpret the datagram)
-    unpacked_data = UNPACKER.unpack(data)
+    unpacked_data = unpacker.unpack(data)
     # print(unpacked_data)
 
     # create a json row
@@ -92,13 +76,13 @@ def readCurrentPoseFromLocator() -> dict:
     return jsonRow
 
 
-def clientLocalizationSetSeed(sessionId: str, x: float, y: float, a: float, enforceSeed: bool = False, uncertainSeed: bool = False):
+def clientLocalizationSetSeed(id, sessionId: str, x: float, y: float, a: float, enforceSeed: bool = False, uncertainSeed: bool = False):
     headers = {
         'Content-Type': 'application/json; charset=utf-8',
     }
 
     payload = {
-        "id": 111,
+        "id": id,
         "jsonrpc": "2.0",
         "method": "clientLocalizationSetSeed",
         "params": {
@@ -114,18 +98,19 @@ def clientLocalizationSetSeed(sessionId: str, x: float, y: float, a: float, enfo
             }
         }
     }
+    id = id + 1
 
     print(f"x={x}, y={y}, a={a}")
-    response = requests.post(url=URL, json=payload, headers=headers)
+    response = requests.post(url=url, json=payload, headers=headers)
     # print(response.json())
 
 
-def sessionLogin() -> str:
+def sessionLogin(id) -> str:
     headers = {
         'Content-Type': 'application/json; charset=utf-8',
     }
     payload = {
-        "id": 101,
+        "id": id,
         "jsonrpc": "2.0",
         "method": "sessionLogin",
         "params": {
@@ -140,22 +125,22 @@ def sessionLogin() -> str:
             }
         }
     }
-    # print(payload)
+    id = id + 1
 
-    response = requests.post(url=URL, json=payload, headers=headers)
+    response = requests.post(url=url, json=payload, headers=headers)
     # print(response.json())
     sessionId = response.json()['result']['response']['sessionId']
 
     return sessionId
 
 
-def sessionLogout(sessionId: str = None):
+def sessionLogout(id, sessionId: str = None):
     headers = {
         'Content-Type': 'application/json; charset=utf-8',
     }
 
     payload = {
-        "id": 103,
+        "id": id,
         "jsonrpc": "2.0",
         "method": "sessionLogout",
         "params": {
@@ -164,48 +149,31 @@ def sessionLogout(sessionId: str = None):
             }
         }
     }
+    id = id + 1
 
-    response = requests.post(url=URL, json=payload, headers=headers)
+    response = requests.post(url=url, json=payload, headers=headers)
     # print(response.json())
 
 
 def run():
-    client = snap7.client.Client()
-    client.connect(PLC_ADDRESS, PLC_RACK, PLC_SLOT, PLC_PORT)
-    all_data_a = client.db_read(1, 0, ROW_SIZE*seed_num)
-    db1_a = snap7.util.DB(
-        db_number=DB_NUMBER,
-        bytearray_=all_data_a,
-        specification=layout,
-        row_size=ROW_SIZE,
-        size=seed_num
-    )
-    seed_a = db1_a.export()
+    # Connect to the database
+    connection = sqlite3.connect('locator.db')
+
+    # Create a cursor object
+    cursor = connection.cursor()
+
+    # Retrieve the data
+    seed_a = cursor.execute("SELECT * FROM seed").fetchall()
 
     while True:
         time.sleep(0.5)
 
-        all_data_b = client.db_read(1, 0, ROW_SIZE*seed_num)
-        db1_b = snap7.util.DB(
-            db_number=DB_NUMBER,
-            bytearray_=all_data_b,
-            specification=layout,
-            row_size=ROW_SIZE,
-            size=seed_num
-        )
-        seed_b = db1_b.export()
-        for i in range(seed_num):
-            if (not seed_a[i]['recordSeed'] and seed_b[i]['recordSeed']):
-                # # pose 0 in DB stores current pose
-                # # write pose 0 to pose i in the data block
-                # client.db_write(
-                #     db_number=1,
-                #     start=i*ROW_SIZE+2,
-                #     data=all_data_b[2:2+POSE_SIZE]  # Pose2D in the data block
-                # )
+        seed_b = cursor.execute("SELECT * FROM seed").fetchall()
 
+        for i in range(len(seed_b)):
+            if (not seed_a[i]['teach'] and seed_b[i]['teach']):
                 # read current pose from Locator and write it to pose i in the data block
-                pose = readCurrentPoseFromLocator()
+                pose = client_localization_pose()
                 assert (pose["localization_state"] >= 2), "NOT_LOCALIZED"
                 print("LOCALIZED")
                 print(pose)
@@ -276,11 +244,11 @@ if __name__ == '__main__':
     parser.add_argument("--plc_port", type=int,
                         default=PLC_PORT, help="port of PLC")
     parser.add_argument("--locator_address", type=str,
-                        default=LOCATOR_ADDRESS, help="address of Locator")
+                        default=locator_ip, help="address of Locator")
     parser.add_argument("--locator_binary_port", type=int,
-                        default=LOCATOR_BINARY_PORT, help="binary port of Locator")
+                        default=locator_pose_port, help="binary port of Locator")
     parser.add_argument("--locator_json_rpc_port", type=int,
-                        default=LOCATOR_JSON_RPC_PORT, help="JSON RPC port of Locator")
+                        default=locator_json_rpc_port, help="JSON RPC port of Locator")
 
     args = parser.parse_args()
     if args.seed_num:
@@ -295,11 +263,12 @@ if __name__ == '__main__':
         PLC_PORT = args.plc_port
     logger.info(f"PLC address: {PLC_ADDRESS}")
     logger.info(f"PLC port: {PLC_PORT}")
-    print("Locator host address: " + LOCATOR_ADDRESS)
-    print("Locator bianry port: " + str(LOCATOR_BINARY_PORT))
+    print("Locator host address: " + locator_ip)
+    print("Locator bianry port: " + str(locator_pose_port))
 
     while True:
         try:
+
             time.sleep(0.5)  # give 0.5s for the KeyboardInterrupt to be caught
             run()
         except KeyboardInterrupt:
@@ -309,4 +278,7 @@ if __name__ == '__main__':
             print(sys.exc_info())
             logger.exception(e)
             print("Some exceptions arise. Restart run()...")
-        # finally:
+        finally:
+            # Close the cursor and connection
+            cur.close()
+            conn.close()

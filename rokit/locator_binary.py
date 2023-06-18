@@ -6,12 +6,12 @@ import struct
 ClientLocalizationPoseDatagram = struct.Struct('<ddQiQQddddddddddddddQddd')
 
 
-def ClientLocalizationPose(locator_ip, locator_port) -> dict:
+def getClientLocalizationPose(locator_ip, port_client_localization_pose) -> dict:
     # Creating a TCP/IP socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     # Connecting to the server
-    server_address = (locator_ip, locator_port)
+    server_address = (locator_ip, port_client_localization_pose)
 
     print('connecting to Locator %s : %s ...' % (server_address))
     try:

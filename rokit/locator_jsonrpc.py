@@ -76,3 +76,5 @@ def sessionLogout(url, id, sessionId: str = None):
 
     response = requests.post(url=url, json=payload, headers=headers)
     # print(response.json())
+
+
