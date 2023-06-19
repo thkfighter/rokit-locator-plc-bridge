@@ -18,7 +18,7 @@ import requests
 import sqlite3
 # import PySimpleGUI as sg
 
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
 now = datetime.now()
 date_time = now.strftime("%d-%m-%Y-%H-%M-%S")
@@ -34,7 +34,7 @@ url = 'http://'+locator_ip+':' + str(locator_json_rpc_port)
 
 # ClientLocalizationPoseDatagram data structure (see API manual)
 unpacker = struct.Struct('<ddQiQQddddddddddddddQddd')
-print(datetime.now())
+# print(datetime.now())
 
 id = 0
 
@@ -46,13 +46,13 @@ def get_client_localization_pose() -> dict:
     # Connecting to the server
     server_address = (locator_ip, locator_pose_port)
 
-    print('connecting to Locator %s : %s ...' % (server_address))
+    logging.info('connecting to Locator %s : %s ...' % (server_address))
     try:
         sock.connect(server_address)
-        print('Connected.')
+        logging.info('Connected.')
     except socket.error as e:
-        print(str(e.message))
-        print('Connection to Locator failed...')
+        logging.error(str(e.message))
+        logging.error('Connection to Locator failed...')
         return
 
     # read the socket
@@ -95,7 +95,7 @@ def clientLocalizationSetSeed(id, sessionId: str, x: float, y: float, a: float, 
     }
     id = id + 1
 
-    print(f"x={x}, y={y}, a={a}")
+    logging.info(f"x={x}, y={y}, a={a}")
     response = requests.post(url=url, json=payload)
     # print(response.json())
 
@@ -120,7 +120,7 @@ def sessionLogin(id) -> str:
     id = id + 1
 
     response = requests.post(url=url, json=payload)
-    # print(response.json())
+    logging.debug(response.json())
     sessionId = response.json()['result']['response']['sessionId']
 
     return sessionId
@@ -144,7 +144,7 @@ def sessionLogout(id, sessionId: str = None):
     id = id + 1
 
     response = requests.post(url=url, json=payload, headers=headers)
-    # print(response.json())
+    logging.debug(response.json())
 
 
 def run():
@@ -167,8 +167,8 @@ def run():
                 # read current pose from Locator and write it to pose i in the data block
                 pose = get_client_localization_pose()
                 assert (pose["localization_state"] >= 2), "NOT_LOCALIZED"
-                print("LOCALIZED")
-                print(pose)
+                logging.info("LOCALIZED")
+                logging.info(pose)
 
                 # Define the update query
                 query = "UPDATE seeds SET x = ?, y=?, yaw=?, teach=? WHERE id =?"
@@ -182,11 +182,12 @@ def run():
                 # Commit the changes
                 connection.commit()
 
-                print(f"Seed taught, id {seed_b[i][0]}, name {seed_b[i][1]}")
+                logging.info(
+                    f"Seed taught, id {seed_b[i][0]}, name {seed_b[i][1]}")
                 break
             if (not seed_a[i][8] and seed_b[i][8]):
                 # set seed
-                print('setting seed...')
+                logging.info('setting seed...')
                 session_id = sessionLogin(id)
                 clientLocalizationSetSeed(id,
                                           sessionId=session_id,
@@ -201,7 +202,8 @@ def run():
 
                 # Commit the changes
                 connection.commit()
-                print(f"Seed set, id {seed_b[i][0]}, name {seed_b[i][1]}")
+                logging.info(
+                    f"Seed set, id {seed_b[i][0]}, name {seed_b[i][1]}")
                 break
         seed_a = seed_b
 
@@ -247,6 +249,10 @@ if __name__ == '__main__':
     # print("Locator host address: " + locator_ip)
     # print("Locator bianry port: " + str(locator_pose_port))
 
+    format = '%(asctime)s - %(levelname)s - %(message)s'
+    logging.basicConfig(format=format, level=logging.INFO,
+                        datefmt="%Y-%m-%d %H:%M:%S")
+
     while True:
         try:
 
@@ -256,9 +262,9 @@ if __name__ == '__main__':
             # press ctrl+c to stop the program
             sys.exit("The program exits as you press ctrl+c.")
         except Exception as e:
-            print(sys.exc_info())
-            logger.exception(e)
-            print("Some exceptions arise. Restart run()...")
+            logging.error(sys.exc_info())
+            logging.exception(e)
+            logging.error("Some exceptions arise. Restart run()...")
         # finally:
             # Close the cursor and connection
             # cur.close()

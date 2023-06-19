@@ -15,7 +15,7 @@ import time
 import logging
 import requests
 import snap7
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
 now = datetime.now()
 date_time = now.strftime("%d-%m-%Y-%H-%M-%S")
@@ -31,7 +31,6 @@ URL = 'http://'+LOCATOR_ADDRESS+':' + str(LOCATOR_JSON_RPC_PORT)
 
 # ClientLocalizationPoseDatagram data structure (see API manual)
 UNPACKER = struct.Struct('<ddQiQQddddddddddddddQddd')
-print(datetime.now())
 
 sessionId = ''  # ROKIT Locator JSON RPC session ID
 
@@ -63,20 +62,20 @@ def readCurrentPoseFromLocator() -> dict:
     # Connecting to the server
     server_address = (LOCATOR_ADDRESS, LOCATOR_BINARY_PORT)
 
-    print('connecting to Locator %s : %s ...' % (server_address))
+    logging.info('connecting to Locator %s : %s ...' % (server_address))
     try:
         sock.connect(server_address)
-        print('Connected.')
+        logging.info('Connected.')
     except socket.error as e:
-        print(str(e.message))
-        print('Connection to Locator failed...')
+        logging.error(str(e.message))
+        logging.error('Connection to Locator failed...')
         return
 
     # read the socket
     data = sock.recv(UNPACKER.size)
     # upack the data (= interpret the datagram)
     unpacked_data = UNPACKER.unpack(data)
-    # print(unpacked_data)
+    logging.debug(unpacked_data)
 
     # create a json row
     jsonRow = {
@@ -88,7 +87,7 @@ def readCurrentPoseFromLocator() -> dict:
         'localization_state': unpacked_data[3]
     }
     sock.close()
-    # print(jsonRow)
+    logging.debug(jsonRow)
     return jsonRow
 
 
@@ -115,9 +114,9 @@ def clientLocalizationSetSeed(sessionId: str, x: float, y: float, a: float, enfo
         }
     }
 
-    print(f"x={x}, y={y}, a={a}")
+    logging.info(f"x={x}, y={y}, a={a}")
     response = requests.post(url=URL, json=payload, headers=headers)
-    # print(response.json())
+    logging.debug(response.json())
 
 
 def sessionLogin() -> str:
@@ -140,10 +139,10 @@ def sessionLogin() -> str:
             }
         }
     }
-    # print(payload)
+    logging.debug(payload)
 
     response = requests.post(url=URL, json=payload, headers=headers)
-    # print(response.json())
+    logging.debug(response.json())
     sessionId = response.json()['result']['response']['sessionId']
 
     return sessionId
@@ -166,7 +165,7 @@ def sessionLogout(sessionId: str = None):
     }
 
     response = requests.post(url=URL, json=payload, headers=headers)
-    # print(response.json())
+    logging.debug(response.json())
 
 
 def run():
@@ -207,8 +206,8 @@ def run():
                 # read current pose from Locator and write it to pose i in the data block
                 pose = readCurrentPoseFromLocator()
                 assert (pose["localization_state"] >= 2), "NOT_LOCALIZED"
-                print("LOCALIZED")
-                print(pose)
+                logging.info("LOCALIZED")
+                logging.info(pose)
 
                 pose_ba = struct.pack(
                     '>ddd', pose['x'], pose['y'], pose['yaw'])
@@ -226,7 +225,7 @@ def run():
                     data=bytearray([0b00000000])
                 )
                 # client.wait_as_completion(5000)
-                print(f"Seed {i} recorded.")
+                logging.info(f"Seed {i} recorded.")
                 break
             if (not seed_a[i]['setSeed'] and seed_b[i]['setSeed']):
                 setSeed(x=seed_b[i]['x'],
@@ -234,7 +233,7 @@ def run():
                         a=seed_b[i]['a'],
                         enforceSeed=seed_b[i]['enforceSeed'],
                         uncertainSeed=seed_b[i]['uncertainSeed'])
-                print(f"Seed {i} set.")
+                logging.info(f"Seed {i} set.")
 
                 client.db_write(
                     db_number=DB_NUMBER,
@@ -259,7 +258,7 @@ def recordSeed(station: int):
 
 def setSeed(x, y, a, enforceSeed, uncertainSeed):
     sessionId = sessionLogin()
-    print(sessionId)
+    logging.info(sessionId)
     clientLocalizationSetSeed(sessionId=sessionId, x=x, y=y, a=a,
                               enforceSeed=enforceSeed,
                               uncertainSeed=uncertainSeed)
@@ -293,10 +292,14 @@ if __name__ == '__main__':
             raise argparse.ArgumentTypeError(
                 'Value has to be between 1 and 65535')
         PLC_PORT = args.plc_port
-    logger.info(f"PLC address: {PLC_ADDRESS}")
-    logger.info(f"PLC port: {PLC_PORT}")
-    print("Locator host address: " + LOCATOR_ADDRESS)
-    print("Locator bianry port: " + str(LOCATOR_BINARY_PORT))
+    logging.info(f"PLC address: {PLC_ADDRESS}")
+    logging.info(f"PLC port: {PLC_PORT}")
+    logging.info("Locator host address: " + LOCATOR_ADDRESS)
+    logging.info("Locator bianry port: " + str(LOCATOR_BINARY_PORT))
+
+    format = '%(asctime)s - %(levelname)s - %(message)s'
+    logging.basicConfig(format=format, level=logging.INFO,
+                        datefmt="%Y-%m-%d %H:%M:%S")
 
     while True:
         try:
@@ -306,7 +309,7 @@ if __name__ == '__main__':
             # press ctrl+c to stop the program
             sys.exit("The program exits as you press ctrl+c.")
         except Exception as e:
-            print(sys.exc_info())
-            logger.exception(e)
-            print("Some exceptions arise. Restart run()...")
+            logging.error(sys.exc_info())
+            logging.exception(e)
+            logging.error("Some exceptions arise. Restart run()...")
         # finally:
