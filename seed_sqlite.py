@@ -37,7 +37,6 @@ unpacker = struct.Struct('<ddQiQQddddddddddddddQddd')
 print(datetime.now())
 
 id = 0
-# session_id = ''  # ROKIT Locator JSON RPC session ID
 
 
 def get_client_localization_pose() -> dict:
@@ -183,7 +182,7 @@ def run():
                 # Commit the changes
                 connection.commit()
 
-                print(f"Seed id {id+1} taught.")
+                print(f"Seed taught, id {seed_b[i][0]}, name {seed_b[i][1]}")
                 break
             if (not seed_a[i][8] and seed_b[i][8]):
                 # set seed
@@ -202,7 +201,7 @@ def run():
 
                 # Commit the changes
                 connection.commit()
-                print(f"Seed id {i+1} set.")
+                print(f"Seed set, id {seed_b[i][0]}, name {seed_b[i][1]}")
                 break
         seed_a = seed_b
 
