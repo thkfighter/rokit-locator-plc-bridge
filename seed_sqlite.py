@@ -5,6 +5,7 @@
 # Created On: 2023-06-18
 # Copyright (c) 2023 Shanghai Bosch Rexroth Hydraulics & Automation Ltd.
 #
+# https://realpython.com/intro-to-python-threading/#producer-consumer-using-lock
 
 import socket
 import sys
@@ -14,68 +15,79 @@ from datetime import datetime
 import time
 import logging
 import requests
-# import snap7
 import sqlite3
-# import PySimpleGUI as sg
+import threading
+import concurrent.futures
 
-# logger = logging.getLogger(__name__)
-
-now = datetime.now()
-date_time = now.strftime("%d-%m-%Y-%H-%M-%S")
 
 # Locator
 user_name = "admin"
 password = "bbZGs3wFsB35"
-locator_ip = '127.0.0.1'
+locator_ip = "127.0.0.1"
 locator_pose_port = 9011
 
 locator_json_rpc_port = 8080
-url = 'http://'+locator_ip+':' + str(locator_json_rpc_port)
+url = "http://" + locator_ip + ":" + str(locator_json_rpc_port)
 
 # ClientLocalizationPoseDatagram data structure (see API manual)
-unpacker = struct.Struct('<ddQiQQddddddddddddddQddd')
+unpacker = struct.Struct("<ddQiQQddddddddddddddQddd")
 # print(datetime.now())
 
 id = 0
+pose = {}
 
 
-def get_client_localization_pose() -> dict:
+def get_client_localization_pose():
+    """Receive localization poses from ROKIT Locator and save them to a global variable, pose"""
+    global pose
     # Creating a TCP/IP socket
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-    # Connecting to the server
+    client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # Connect to the server
     server_address = (locator_ip, locator_pose_port)
+    client_sock.connect(server_address)
+    logging.info(f"Connected to {locator_ip} on port {locator_pose_port}")
 
-    logging.info('connecting to Locator %s : %s ...' % (server_address))
+    # logging.info("connecting to Locator %s : %s ..." % (server_address))
+    # try:
+    #     client_sock.connect(server_address)
+    #     logging.info(f"Connected to {locator_ip} on {locator_pose_port}")
+    # except socket.error as e:
+    #     logging.error(str(e.message))
+    #     logging.error("Connection to Locator failed...")
     try:
-        sock.connect(server_address)
-        logging.info('Connected.')
-    except socket.error as e:
-        logging.error(str(e.message))
-        logging.error('Connection to Locator failed...')
-        return
+        while True:
+            # read the socket
+            data = client_sock.recv(unpacker.size)
+            # upack the data (= interpret the datagram)
+            if not data:
+                continue
+            unpacked_data = unpacker.unpack(data)
 
-    # read the socket
-    data = sock.recv(unpacker.size)
-    # upack the data (= interpret the datagram)
-    unpacked_data = unpacker.unpack(data)
-    # print(unpacked_data)
-
-    # create a json row
-    jsonRow = {
-        'timestamp': datetime.fromtimestamp(unpacked_data[1]).strftime("%d-%m-%Y-%H-%M-%S"),
-        'x': unpacked_data[6],
-        'y': unpacked_data[7],
-        # 'yaw': math.degrees(unpacked_data[8]),
-        'yaw': unpacked_data[8],
-        'localization_state': unpacked_data[3]
-    }
-    sock.close()
-    # print(jsonRow)
-    return jsonRow
+            # create a json row
+            pose = {
+                "timestamp": datetime.fromtimestamp(unpacked_data[1]).strftime(
+                    "%d-%m-%Y-%H-%M-%S"
+                ),
+                "x": unpacked_data[6],
+                "y": unpacked_data[7],
+                # 'yaw': math.degrees(unpacked_data[8]),
+                "yaw": unpacked_data[8],
+                "localization_state": unpacked_data[3],
+            }
+            # logging.debug(pose)
+    finally:
+        client_sock.close()
 
 
-def clientLocalizationSetSeed(id, sessionId: str, x: float, y: float, a: float, enforceSeed: bool = False, uncertainSeed: bool = False):
+def clientLocalizationSetSeed(
+    sessionId: str,
+    x: float,
+    y: float,
+    a: float,
+    enforceSeed: bool = False,
+    uncertainSeed: bool = False,
+):
+    global id
     payload = {
         "id": id,
         "jsonrpc": "2.0",
@@ -85,22 +97,20 @@ def clientLocalizationSetSeed(id, sessionId: str, x: float, y: float, a: float, 
                 "sessionId": sessionId,
                 "enforceSeed": enforceSeed,
                 "uncertainSeed": uncertainSeed,
-                "seedPose": {
-                    "x": x,
-                    "y": y,
-                    "a": a
-                }
+                "seedPose": {"x": x, "y": y, "a": a},
             }
-        }
+        },
     }
     id = id + 1
+    logging.debug(payload)
 
     logging.info(f"x={x}, y={y}, a={a}")
     response = requests.post(url=url, json=payload)
     # print(response.json())
 
 
-def sessionLogin(id) -> str:
+def sessionLogin() -> str:
+    global id
     payload = {
         "id": id,
         "jsonrpc": "2.0",
@@ -110,102 +120,155 @@ def sessionLogin(id) -> str:
                 "timeout": {  # timeout, not timestamp
                     "valid": True,
                     "time": 60,  # Integer64
-                    "resolution": 1  # real_time = time / resolution
+                    "resolution": 1,  # real_time = time / resolution
                 },
                 "userName": user_name,
-                "password": password
+                "password": password,
             }
-        }
+        },
     }
     id = id + 1
+    logging.debug(payload)
 
     response = requests.post(url=url, json=payload)
     logging.debug(response.json())
-    sessionId = response.json()['result']['response']['sessionId']
+    sessionId = response.json()["result"]["response"]["sessionId"]
 
     return sessionId
 
 
-def sessionLogout(id, sessionId: str = None):
-    headers = {
-        'Content-Type': 'application/json; charset=utf-8',
-    }
+def sessionLogout(sessionId: str = None):
+    global id
+    # headers = {
+    #     "Content-Type": "application/json; charset=utf-8",
+    # }
 
     payload = {
         "id": id,
         "jsonrpc": "2.0",
         "method": "sessionLogout",
-        "params": {
-            "query": {
-                "sessionId": sessionId
-            }
-        }
+        "params": {"query": {"sessionId": sessionId}},
     }
     id = id + 1
 
-    response = requests.post(url=url, json=payload, headers=headers)
+    response = requests.post(url=url, json=payload)
     logging.debug(response.json())
 
 
-def run():
+def update_seed_1():
+    """Update the first seed in table seeds of locator.db"""
+    global pose
     # Connect to the database
-    connection = sqlite3.connect('locator.db')
-
+    connection = sqlite3.connect("locator.db")
     # Create a cursor object
     cursor = connection.cursor()
 
-    # Retrieve the data
-    seed_a = cursor.execute("SELECT * FROM seeds").fetchall()
-
-    while True:
-        time.sleep(0.5)
-
-        seed_b = cursor.execute("SELECT * FROM seeds").fetchall()
-
-        for i in range(len(seed_b)):
-            if (not seed_a[i][7] and seed_b[i][7]):  # teach seed
-                # read current pose from Locator and write it to pose i in the data block
-                pose = get_client_localization_pose()
-                assert (pose["localization_state"] >= 2), "NOT_LOCALIZED"
-                logging.info("LOCALIZED")
-                logging.info(pose)
-
+    try:
+        while True:
+            if "localization_state" in pose and pose["localization_state"] >= 2:
+                pose_a = pose
                 # Define the update query
-                query = "UPDATE seeds SET x = ?, y=?, yaw=?, teach=? WHERE id =?"
-
+                query = "UPDATE seeds SET x = ?, y=?, yaw=? WHERE id =1"
                 # Define the values to update and the condition
-                values = (pose['x'], pose['y'], pose['yaw'], 0, i+1)
-
+                values = (pose_a["x"], pose_a["y"], pose_a["yaw"])
                 # Execute the query
                 cursor.execute(query, values)
-
                 # Commit the changes
                 connection.commit()
-
-                logging.info(
-                    f"Seed taught, id {seed_b[i][0]}, name {seed_b[i][1]}")
+                logging.debug(f"last pose updated to {values}")
                 break
-            if (not seed_a[i][8] and seed_b[i][8]):
+            else:
+                time.sleep(0.5)
+                continue
+
+        while True:
+            time.sleep(0.5)
+            if "localization_state" in pose and pose["localization_state"] >= 2:
+                pose_b = pose
+                # update last pose on the first row of table seeds
+                # units: meter and radian, 0.0087 radians = 0.5 degrees
+                if (
+                    abs(pose_b["x"] - pose_a["x"]) > 0.005
+                    or abs(pose_b["y"] - pose_a["y"]) > 0.005
+                    or abs(pose_b["yaw"] - pose_a["yaw"]) > 0.0087
+                ):
+                    # Define the update query
+                    query = "UPDATE seeds SET x = ?, y=?, yaw=? WHERE id =1"
+                    # Define the values to update and the condition
+                    values = (pose_b["x"], pose_b["y"], pose_b["yaw"])
+                    # Execute the query
+                    cursor.execute(query, values)
+                    # Commit the changes
+                    connection.commit()
+                    logging.debug(f"seed 1 updated to {values}")
+
+                    pose_a = pose_b
+    finally:
+        cursor.close()
+        connection.close()
+
+
+def teach_or_set_seed():
+    global pose
+    # Connect to the database
+    connection = sqlite3.connect("locator.db")
+    # Create a cursor object
+    cursor = connection.cursor()
+    # Retrieve the data
+    seeds_a = cursor.execute("SELECT * FROM seeds").fetchall()
+
+    try:
+        while True:
+            time.sleep(0.5)
+
+            seeds_b = cursor.execute("SELECT * FROM seeds").fetchall()
+
+            for i in range(len(seeds_b)):
+                # teach seed
+                if not seeds_a[i][7] and seeds_b[i][7]:
+                    # read current pose from Locator and write it to pose i in the data block
+                    # pose = get_client_localization_pose()
+                    assert pose["localization_state"] >= 2, "NOT_LOCALIZED"
+
+                    # Define the update query
+                    query = "UPDATE seeds SET x = ?, y=?, yaw=?, teach=? WHERE id =?"
+                    # Define the values to update and the condition
+                    values = (pose["x"], pose["y"], pose["yaw"], 0, i + 1)
+                    # Execute the query
+                    cursor.execute(query, values)
+                    # Commit the changes
+                    connection.commit()
+
+                    logging.info(
+                        f"Seed taught, id {seeds_b[i][0]}, name {seeds_b[i][1]}, {values[:3]}"
+                    )
+                    break
+
                 # set seed
-                logging.info('setting seed...')
-                session_id = sessionLogin(id)
-                clientLocalizationSetSeed(id,
-                                          sessionId=session_id,
-                                          x=seed_b[i][2],
-                                          y=seed_b[i][3],
-                                          a=seed_b[i][4],
-                                          enforceSeed=bool(seed_b[i][5]),
-                                          uncertainSeed=bool(seed_b[i][6]))
-                sessionLogout(id, session_id)
-                # reset field set in DB table seeds
-                cursor.execute("UPDATE seeds SET 'set'=? WHERE id=?", (0, i+1))
+                if not seeds_a[i][8] and seeds_b[i][8]:
+                    session_id = sessionLogin()
+                    clientLocalizationSetSeed(
+                        sessionId=session_id,
+                        x=seeds_b[i][2],
+                        y=seeds_b[i][3],
+                        a=seeds_b[i][4],
+                        enforceSeed=bool(seeds_b[i][5]),
+                        uncertainSeed=bool(seeds_b[i][6]),
+                    )
+                    sessionLogout(session_id)
+                    # reset field set in DB table seeds
+                    cursor.execute("UPDATE seeds SET 'set'=? WHERE id=?", (0, i + 1))
 
-                # Commit the changes
-                connection.commit()
-                logging.info(
-                    f"Seed set, id {seed_b[i][0]}, name {seed_b[i][1]}")
-                break
-        seed_a = seed_b
+                    # Commit the changes
+                    connection.commit()
+                    logging.info(
+                        f"Seed set, id {seeds_b[i][0]}, name {seeds_b[i][1]}, x={seeds_b[i][2]}, y={seeds_b[i][3]}, yaw={seeds_b[i][4]}"
+                    )
+                    break
+            seeds_a = seeds_b
+    finally:
+        cursor.close()
+        connection.close()
 
 
 # def setSeed(x, y, a, enforceSeed, uncertainSeed):
@@ -217,7 +280,7 @@ def run():
 #     sessionLogout(id, sessionId)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # parser = argparse.ArgumentParser(
     #     description='works as a protocol converter between Siemens S7-1200 and ROKIT Locator', formatter_class=argparse.RawDescriptionHelpFormatter)
     # # parser.add_argument("--seed_num", type=int,
@@ -249,23 +312,38 @@ if __name__ == '__main__':
     # print("Locator host address: " + locator_ip)
     # print("Locator bianry port: " + str(locator_pose_port))
 
-    format = '%(asctime)s - %(levelname)s - %(message)s'
-    logging.basicConfig(format=format, level=logging.INFO,
-                        datefmt="%Y-%m-%d %H:%M:%S")
+    # format = "%(asctime)s [%(levelname)s] %(threadName)s %(message)s"
+    format = "%(asctime)s [%(levelname)s] %(funcName)s(), %(message)s"
+    logging.basicConfig(format=format, level=logging.DEBUG, datefmt="%Y-%m-%d %H:%M:%S")
 
-    while True:
+    # x = threading.Thread(target=get_client_localization_pose, daemon=True)
+    # logging.info("start thread get_client_localization_pose")
+    # x.start()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        executor.submit(get_client_localization_pose)
+        executor.submit(update_seed_1)
+        executor.submit(teach_or_set_seed)
         try:
-
-            time.sleep(0.5)  # give 0.5s for the KeyboardInterrupt to be caught
-            run()
+            while True:
+                time.sleep(1)
         except KeyboardInterrupt:
-            # press ctrl+c to stop the program
-            sys.exit("The program exits as you press ctrl+c.")
-        except Exception as e:
-            logging.error(sys.exc_info())
-            logging.exception(e)
-            logging.error("Some exceptions arise. Restart run()...")
-        # finally:
-            # Close the cursor and connection
-            # cur.close()
-            # conn.close()
+            print("Main thread received KeyboardInterrupt")
+            executor.shutdown(wait=True)
+            print("All threads completed")
+
+    # while True:
+    #     try:
+    #         time.sleep(0.5)  # give 0.5s for the KeyboardInterrupt to be caught
+    #         teach_or_set_seed()
+    #     except KeyboardInterrupt:
+    #         # press ctrl+c to stop the program
+    #         sys.exit("The program exits as you press ctrl+c.")
+    #     except Exception as e:
+    #         logging.error(sys.exc_info())
+    #         logging.exception(e)
+    #         logging.error("Some exceptions arise. Restart run()...")
+    # finally:
+    #     x.join()
+    # client_sock.close()
+    # Close the cursor and connection of database
