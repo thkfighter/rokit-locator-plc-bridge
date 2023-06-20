@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# File: seed.py
 # Created On: 2023-06-18
 # Copyright (c) 2023 Shanghai Bosch Rexroth Hydraulics & Automation Ltd.
 #
 # https://realpython.com/intro-to-python-threading/#producer-consumer-using-lock
 
 import socket
-import sys
 import struct
 import argparse
 from datetime import datetime
