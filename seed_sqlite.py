@@ -16,18 +16,27 @@ import time
 import logging
 import requests
 import sqlite3
-import threading
+import json
 import concurrent.futures
+
+# import threading
 
 
 # Locator
-user_name = "admin"
-password = "bbZGs3wFsB35"
-locator_ip = "127.0.0.1"
-locator_pose_port = 9011
+config = {
+    "user_name": "admin",
+    "password": "admin",
+    "locator_ip": "127.0.0.1",
+    "locator_pose_port": 9011,
+    "locator_json_rpc_port": 8080,
+}
+# user_name = "admin"
+# password = "admin"
+# locator_ip = "127.0.0.1"
+# locator_pose_port = 9011
+# locator_json_rpc_port = 8080
 
-locator_json_rpc_port = 8080
-url = "http://" + locator_ip + ":" + str(locator_json_rpc_port)
+url = "http://" + config["locator_ip"] + ":" + str(config["locator_json_rpc_port"])
 
 # ClientLocalizationPoseDatagram data structure (see API manual)
 unpacker = struct.Struct("<ddQiQQddddddddddddddQddd")
@@ -43,9 +52,11 @@ def get_client_localization_pose():
     # Creating a TCP/IP socket
     client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Connect to the server
-    server_address = (locator_ip, locator_pose_port)
+    server_address = (config["locator_ip"], config["locator_pose_port"])
     client_sock.connect(server_address)
-    logging.info(f"Connected to {locator_ip} on port {locator_pose_port}")
+    logging.info(
+        f"Connected to {config['locator_ip']} on port {config['locator_pose_port']}"
+    )
 
     # logging.info("connecting to Locator %s : %s ..." % (server_address))
     # try:
@@ -122,8 +133,8 @@ def sessionLogin() -> str:
                     "time": 60,  # Integer64
                     "resolution": 1,  # real_time = time / resolution
                 },
-                "userName": user_name,
-                "password": password,
+                "userName": config["user_name"],
+                "password": config["password"],
             }
         },
     }
@@ -271,46 +282,80 @@ def teach_or_set_seed():
         connection.close()
 
 
-# def setSeed(x, y, a, enforceSeed, uncertainSeed):
-#     sessionId = sessionLogin(id)
-#     print(sessionId)
-#     clientLocalizationSetSeed(id, sessionId=sessionId, x=x, y=y, a=a,
-#                               enforceSeed=enforceSeed,
-#                               uncertainSeed=uncertainSeed)
-#     sessionLogout(id, sessionId)
-
-
 if __name__ == "__main__":
-    # parser = argparse.ArgumentParser(
-    #     description='works as a protocol converter between Siemens S7-1200 and ROKIT Locator', formatter_class=argparse.RawDescriptionHelpFormatter)
-    # # parser.add_argument("--seed_num", type=int,
-    # #                     default=seed_num, help="number of seeds")
-    # # parser.add_argument("--plc_address", type=str,
-    # #                     default=PLC_ADDRESS, help="IP address of PLC")
-    # # parser.add_argument("--plc_port", type=int,
-    # #                     default=PLC_PORT, help="port of PLC")
-    # parser.add_argument("--locator_address", type=str,
-    #                     default=locator_ip, help="address of Locator")
-    # parser.add_argument("--locator_binary_port", type=int,
-    #                     default=locator_pose_port, help="binary port of Locator")
-    # parser.add_argument("--locator_json_rpc_port", type=int,
-    #                     default=locator_json_rpc_port, help="JSON RPC port of Locator")
+    parser = argparse.ArgumentParser(
+        description="a program to teach and set seeds for ROKIT Locator",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
 
-    # args = parser.parse_args()
-    # if args.seed_num:
-    #     seed_num = args.seed_num
-    # if args.plc_address:
-    #     PLC_ADDRESS = args.plc_address
-    # if args.plc_port:
+    parser.add_argument(
+        "-c",
+        "--config",
+        type=str,
+        help="The path to the configuration file",
+    )
+    parser.add_argument(
+        "--user_name",
+        type=str,
+        default=config["user_name"],
+        help="User name of ROKIT Locator client",
+    )
+    parser.add_argument(
+        "--password",
+        type=str,
+        default=config["password"],
+        help="Password of ROKIT Locator client",
+    )
+    parser.add_argument(
+        "--locator_ip",
+        type=str,
+        default=config["locator_ip"],
+        help="IP of ROKIT Locator client",
+    )
+    parser.add_argument(
+        "--locator_pose_port",
+        type=int,
+        default=config["locator_pose_port"],
+        help="Port of binary ClientLocalizationPose",
+    )
+    parser.add_argument(
+        "--locator_json_rpc_port",
+        type=int,
+        default=config["locator_json_rpc_port"],
+        help="Port of JSON RPC ROKIT Locator Client",
+    )
+
+    args = parser.parse_args()
+    # config.json has the highest priority and it will overide other command-line arguments
+    if args.config:
+        with open(args.config, "r") as f:
+            config.update(json.load(f))
+        # user_name = config.get("user_name")
+        # password = config.get("password")
+        # lcoator_ip = config.get("locator_ip")
+        # locator_pose_port = config.get("ocator_pose_port")
+        # locator_json_rpc_port = config.get("locator_json_rpc_port")
+    else:
+        config.update(vars(args))
+    # if args.user_name:
+    #     user_name = args.user_name
+    # if args.password:
+    #     password = args.password
+    # if args.locator_ip:
+    #     locator_ip = args.locator_ip
+    # if args.locator_pose_port:
     #     r = range(1, 65535)
-    #     if args.plc_port not in r:
-    #         raise argparse.ArgumentTypeError(
-    #             'Value has to be between 1 and 65535')
-    #     PLC_PORT = args.plc_port
-    # logger.info(f"PLC address: {PLC_ADDRESS}")
-    # logger.info(f"PLC port: {PLC_PORT}")
-    # print("Locator host address: " + locator_ip)
-    # print("Locator bianry port: " + str(locator_pose_port))
+    #     if args.locator_pose_port not in r:
+    #         raise argparse.ArgumentTypeError("Value has to be between 1 and 65535")
+    #     locator_pose_port = args.locator_pose_port
+    # if args.locator_json_rpc_port:
+    #     r = range(1, 65535)
+    #     if args.locator_json_rpc_port not in r:
+    #         raise argparse.ArgumentTypeError("Value has to be between 1 and 65535")
+    #     locator_json_rpc_port = args.locator_json_rpc_port
+
+    # parser.print_help()
+    print(config)
 
     # format = "%(asctime)s [%(levelname)s] %(threadName)s %(message)s"
     format = "%(asctime)s [%(levelname)s] %(funcName)s(), %(message)s"
@@ -331,19 +376,3 @@ if __name__ == "__main__":
             print("Main thread received KeyboardInterrupt")
             executor.shutdown(wait=True)
             print("All threads completed")
-
-    # while True:
-    #     try:
-    #         time.sleep(0.5)  # give 0.5s for the KeyboardInterrupt to be caught
-    #         teach_or_set_seed()
-    #     except KeyboardInterrupt:
-    #         # press ctrl+c to stop the program
-    #         sys.exit("The program exits as you press ctrl+c.")
-    #     except Exception as e:
-    #         logging.error(sys.exc_info())
-    #         logging.exception(e)
-    #         logging.error("Some exceptions arise. Restart run()...")
-    # finally:
-    #     x.join()
-    # client_sock.close()
-    # Close the cursor and connection of database
