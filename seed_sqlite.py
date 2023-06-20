@@ -28,11 +28,6 @@ config = {
     "locator_pose_port": 9011,
     "locator_json_rpc_port": 8080,
 }
-# user_name = "admin"
-# password = "admin"
-# locator_ip = "127.0.0.1"
-# locator_pose_port = 9011
-# locator_json_rpc_port = 8080
 
 url = "http://" + config["locator_ip"] + ":" + str(config["locator_json_rpc_port"])
 
@@ -56,13 +51,6 @@ def get_client_localization_pose():
         f"Connected to {config['locator_ip']} on port {config['locator_pose_port']}"
     )
 
-    # logging.info("connecting to Locator %s : %s ..." % (server_address))
-    # try:
-    #     client_sock.connect(server_address)
-    #     logging.info(f"Connected to {locator_ip} on {locator_pose_port}")
-    # except socket.error as e:
-    #     logging.error(str(e.message))
-    #     logging.error("Connection to Locator failed...")
     try:
         while True:
             # read the socket
@@ -328,30 +316,8 @@ if __name__ == "__main__":
     if args.config:
         with open(args.config, "r") as f:
             config.update(json.load(f))
-        # user_name = config.get("user_name")
-        # password = config.get("password")
-        # lcoator_ip = config.get("locator_ip")
-        # locator_pose_port = config.get("ocator_pose_port")
-        # locator_json_rpc_port = config.get("locator_json_rpc_port")
     else:
         config.update(vars(args))
-    # if args.user_name:
-    #     user_name = args.user_name
-    # if args.password:
-    #     password = args.password
-    # if args.locator_ip:
-    #     locator_ip = args.locator_ip
-    # if args.locator_pose_port:
-    #     r = range(1, 65535)
-    #     if args.locator_pose_port not in r:
-    #         raise argparse.ArgumentTypeError("Value has to be between 1 and 65535")
-    #     locator_pose_port = args.locator_pose_port
-    # if args.locator_json_rpc_port:
-    #     r = range(1, 65535)
-    #     if args.locator_json_rpc_port not in r:
-    #         raise argparse.ArgumentTypeError("Value has to be between 1 and 65535")
-    #     locator_json_rpc_port = args.locator_json_rpc_port
-
     # parser.print_help()
     print(config)
 
