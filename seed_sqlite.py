@@ -29,8 +29,6 @@ config = {
     "locator_json_rpc_port": 8080,
 }
 
-url = "http://" + config["locator_ip"] + ":" + str(config["locator_json_rpc_port"])
-
 # ClientLocalizationPoseDatagram data structure (see API manual)
 unpacker = struct.Struct("<ddQiQQddddddddddddddQddd")
 # print(datetime.now())
@@ -320,6 +318,8 @@ if __name__ == "__main__":
         config.update(vars(args))
     # parser.print_help()
     print(config)
+
+    url = "http://" + config["locator_ip"] + ":" + str(config["locator_json_rpc_port"])
 
     # format = "%(asctime)s [%(levelname)s] %(threadName)s %(message)s"
     format = "%(asctime)s [%(levelname)s] %(funcName)s(), %(message)s"
