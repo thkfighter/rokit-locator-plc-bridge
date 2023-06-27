@@ -200,12 +200,12 @@
                 {"addr": [10, 1999], "to": [11000, 11999]}
             ]
         },
-        "device_seed": {
+        "device_seed_2": {
             "setup": {
-                "co size": 10,
-                "di size": 10,
-                "hr size": 10,
-                "ir size": 10,
+                "co size": 100,
+                "di size": 100,
+                "hr size": 128,
+                "ir size": 100,
                 "shared blocks": true,
                 "type exception": true,
                 "defaults": {
@@ -226,21 +226,67 @@
                 }
             },
             "invalid": [],
-            "write": [],
-            "bits": [],
-            "uint16": [
-                
+            "write": [
+                [16,19],
+                [32,37]
             ],
+            "bits": [
+                {"addr":[16,19], "value":4369}
+            ],
+            "uint16": [],
             "uint32": [],
             "float32": [
-                {"addr": [0, 1], "value": 115.7, "action":"increment"},
-                {"addr": [2, 3], "value": 215.7},
-                {"addr": [4, 5], "value": 185.7},
-                {"addr": [6, 7], "value": 15.7},
-                {"addr": [8, 9], "value": 25.7}
+                {"addr": [32, 33], "value": 115.7, "action":"increment", "kwargs": {"minval": -100, "maxval": 220} },
+                {"addr": [34, 35], "value": 20},
+                {"addr": [36, 37], "value": 0}
             ],
             "string": [],
-            "repeat": []
+            "repeat": [
+                {"addr": [32, 37], "to": [38, 127]}
+            ]
+        },
+        "device_seed": {
+            "setup": {
+                "co size": 100,
+                "di size": 100,
+                "hr size": 128,
+                "ir size": 100,
+                "shared blocks": true,
+                "type exception": true,
+                "defaults": {
+                    "value": {
+                        "bits": 0,
+                        "uint16": 0,
+                        "uint32": 0,
+                        "float32": 0.0,
+                        "string": " "
+                    },
+                    "action": {
+                        "bits": null,
+                        "uint16": null,
+                        "uint32": null,
+                        "float32": null,
+                        "string": null
+                    }
+                }
+            },
+            "invalid": [],
+            "write": [
+                [16,19],
+                [32,37]
+            ],
+            "bits": [
+                {"addr":[16,19], "value":4369}
+            ],
+            "uint16": [],
+            "uint32": [],
+            "float32": [
+                [32, 127]
+            ],
+            "string": [],
+            "repeat": [
+                {"addr": [32, 37], "to": [38, 127]}
+            ]
         }
     }
 }

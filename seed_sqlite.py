@@ -24,7 +24,7 @@ import concurrent.futures
 config = {
     "user_name": "admin",
     "password": "admin",
-    "locator_ip": "127.0.0.1",
+    "locator_host": "127.0.0.1",
     "locator_pose_port": 9011,
     "locator_json_rpc_port": 8080,
 }
@@ -43,10 +43,10 @@ def get_client_localization_pose():
     # Creating a TCP/IP socket
     client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Connect to the server
-    server_address = (config["locator_ip"], config["locator_pose_port"])
+    server_address = (config["locator_host"], config["locator_pose_port"])
     client_sock.connect(server_address)
     logging.info(
-        f"Connected to {config['locator_ip']} on port {config['locator_pose_port']}"
+        f"Connected to {config['locator_host']} on port {config['locator_pose_port']}"
     )
 
     try:
@@ -291,9 +291,9 @@ if __name__ == "__main__":
         help="Password of ROKIT Locator client",
     )
     parser.add_argument(
-        "--locator_ip",
+        "--locator_host",
         type=str,
-        default=config["locator_ip"],
+        default=config["locator_host"],
         help="IP of ROKIT Locator client",
     )
     parser.add_argument(
@@ -319,7 +319,9 @@ if __name__ == "__main__":
     # parser.print_help()
     print(config)
 
-    url = "http://" + config["locator_ip"] + ":" + str(config["locator_json_rpc_port"])
+    url = (
+        "http://" + config["locator_host"] + ":" + str(config["locator_json_rpc_port"])
+    )
 
     # format = "%(asctime)s [%(levelname)s] %(threadName)s %(message)s"
     format = "%(asctime)s [%(levelname)s] %(funcName)s(), %(message)s"

@@ -1,9 +1,12 @@
 {
     "user_name" : "admin",
     "password" : "admin",
-    "locator_ip" : "127.0.0.1",
+    "locator_host" : "127.0.0.1",
     "locator_pose_port" : 9011,
     "locator_json_rpc_port" : 8080,
-    "plc_ip": "192.168.8.71",
-    "plc_port": 502
+    "plc_host": "192.168.8.71",
+    "plc_port": 502,
+    "bits_starting addr": 16,
+    "pose_starting addr": 32,
+    "seed_num": 16
 }

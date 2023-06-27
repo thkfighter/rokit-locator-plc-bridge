@@ -16,6 +16,7 @@ import requests
 import sqlite3
 import json
 import concurrent.futures
+from pymodbus.client import ModbusTcpClient
 
 # import threading
 
@@ -24,11 +25,14 @@ import concurrent.futures
 config = {
     "user_name": "admin",
     "password": "admin",
-    "locator_ip": "127.0.0.1",
+    "locator_host": "127.0.0.1",
     "locator_pose_port": 9011,
     "locator_json_rpc_port": 8080,
-    "plc_ip": "192.168.8.71",
-    "plc_port": 502
+    "plc_host": "192.168.8.71",
+    "plc_port": 502,
+    "bits_starting addr": 16,
+    "pose_starting addr": 32,
+    "seed_num": 16,
 }
 
 # ClientLocalizationPoseDatagram data structure (see API manual)
@@ -45,10 +49,10 @@ def get_client_localization_pose():
     # Creating a TCP/IP socket
     client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Connect to the server
-    server_address = (config["locator_ip"], config["locator_pose_port"])
+    server_address = (config["locator_host"], config["locator_pose_port"])
     client_sock.connect(server_address)
     logging.info(
-        f"Connected to {config['locator_ip']} on port {config['locator_pose_port']}"
+        f"Connected to {config['locator_host']} on port {config['locator_pose_port']}"
     )
 
     try:
@@ -152,13 +156,13 @@ def sessionLogout(sessionId: str = None):
     logging.debug(response.json())
 
 
-def update_seed_1():
+def update_seed_1(host, port):
     """Update the first seed in table seeds of locator.db"""
     global pose
-    # Connect to the database
-    connection = sqlite3.connect("locator.db")
-    # Create a cursor object
-    cursor = connection.cursor()
+    # Set up the Modbus client
+    client = ModbusTcpClient(host, port)
+    # Connect to the PLC
+    client.connect()
 
     try:
         while True:
@@ -167,8 +171,9 @@ def update_seed_1():
                 # Define the update query
                 query = "UPDATE seeds SET x = ?, y=?, yaw=? WHERE id =1"
                 # Define the values to update and the condition
-                values = (pose_a["x"], pose_a["y"], pose_a["yaw"])
+                values = [pose_a["x"], pose_a["y"], pose_a["yaw"]]
                 # Execute the query
+                client.write_register(32, values, 1)
                 cursor.execute(query, values)
                 # Commit the changes
                 connection.commit()
@@ -205,7 +210,7 @@ def update_seed_1():
         connection.close()
 
 
-def teach_or_set_seed():
+def teach_or_set_seed(host, port):
     global pose
     # Connect to the database
     connection = sqlite3.connect("locator.db")
@@ -268,22 +273,22 @@ def teach_or_set_seed():
         connection.close()
 
 
-from pymodbus.client.sync import ModbusTcpClient
-
-def modbus_client(ip, port):
+def modbus_client(host, port):
     # Set up the Modbus client
-    client = ModbusTcpClient(ip, port)
+    client = ModbusTcpClient(host, port)
 
     # Connect to the PLC
     client.connect()
 
     try:
         while True:
-            time.sleep(1)    
+            time.sleep(1)
             # Read the value of a register
-            result = client.read_holding_registers(address=0, count=12)
+            result = client.read_holding_registers(address=16, count=4)
             # Print the result
             print(result.registers[0])
+    except KeyboardInterrupt as e:
+        logging.exception("modbus_client() thread received KeyboardInterrupt")
     finally:
         # Close the connection
         client.close()
@@ -314,9 +319,9 @@ if __name__ == "__main__":
         help="Password of ROKIT Locator client",
     )
     parser.add_argument(
-        "--locator_ip",
+        "--locator_host",
         type=str,
-        default=config["locator_ip"],
+        default=config["locator_host"],
         help="IP of ROKIT Locator client",
     )
     parser.add_argument(
@@ -342,20 +347,23 @@ if __name__ == "__main__":
     # parser.print_help()
     print(config)
 
-    url = "http://" + config["locator_ip"] + ":" + str(config["locator_json_rpc_port"])
+    url = (
+        "http://" + config["locator_host"] + ":" + str(config["locator_json_rpc_port"])
+    )
 
     # format = "%(asctime)s [%(levelname)s] %(threadName)s %(message)s"
     format = "%(asctime)s [%(levelname)s] %(funcName)s(), %(message)s"
-    logging.basicConfig(format=format, level=logging.DEBUG, datefmt="%Y-%m-%d %H:%M:%S")
+    logging.basicConfig(format=format, level=logging.INFO, datefmt="%Y-%m-%d %H:%M:%S")
 
     # x = threading.Thread(target=get_client_localization_pose, daemon=True)
     # logging.info("start thread get_client_localization_pose")
     # x.start()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        executor.submit(get_client_localization_pose)
-        executor.submit(update_seed_1)
-        executor.submit(teach_or_set_seed)
+        # executor.submit(get_client_localization_pose)
+        # executor.submit(update_seed_1, config["plc_host"], config["plc_port"])
+        # executor.submit(teach_or_set_seed, config["plc_host"], config["plc_port"])
+        executor.submit(modbus_client, config["plc_host"], config["plc_port"])
         try:
             while True:
                 time.sleep(1)
