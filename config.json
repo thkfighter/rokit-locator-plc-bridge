@@ -6,7 +6,7 @@
     "locator_json_rpc_port" : 8080,
     "plc_host": "192.168.8.71",
     "plc_port": 502,
-    "bits_starting addr": 16,
-    "pose_starting addr": 32,
+    "bits_starting_addr": 16,
+    "pose_starting_addr": 32,
     "seed_num": 16
 }

@@ -15,8 +15,12 @@ import logging
 import requests
 import sqlite3
 import json
+import math
 import concurrent.futures
 from pymodbus.client import ModbusTcpClient
+from pymodbus.constants import Endian
+from pymodbus.exceptions import ParameterException
+from pymodbus.payload import BinaryPayloadDecoder, BinaryPayloadBuilder
 
 # import threading
 
@@ -30,8 +34,8 @@ config = {
     "locator_json_rpc_port": 8080,
     "plc_host": "192.168.8.71",
     "plc_port": 502,
-    "bits_starting addr": 16,
-    "pose_starting addr": 32,
+    "bits_starting_addr": 16,
+    "poses_starting_addr": 32,
     "seed_num": 16,
 }
 
@@ -43,17 +47,15 @@ id = 0
 pose = {}
 
 
-def get_client_localization_pose():
+def get_client_localization_pose(host, port):
     """Receive localization poses from ROKIT Locator and save them to a global variable, pose"""
     global pose
     # Creating a TCP/IP socket
     client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Connect to the server
-    server_address = (config["locator_host"], config["locator_pose_port"])
+    server_address = (host, port)
     client_sock.connect(server_address)
-    logging.info(
-        f"Connected to {config['locator_host']} on port {config['locator_pose_port']}"
-    )
+    logging.info(f"Connected to {host}:{port}")
 
     try:
         while True:
@@ -75,7 +77,7 @@ def get_client_localization_pose():
                 "yaw": unpacked_data[8],
                 "localization_state": unpacked_data[3],
             }
-            # logging.debug(pose)
+            logging.debug(pose)
     finally:
         client_sock.close()
 
@@ -156,7 +158,7 @@ def sessionLogout(sessionId: str = None):
     logging.debug(response.json())
 
 
-def update_seed_1(host, port):
+def update_seed_0(host, port, address):
     """Update the first seed in table seeds of locator.db"""
     global pose
     # Set up the Modbus client
@@ -164,20 +166,22 @@ def update_seed_1(host, port):
     # Connect to the PLC
     client.connect()
 
+    builder = BinaryPayloadBuilder(
+        byteorder=Endian.Little, wordorder=Endian.Little)
     try:
         while True:
             if "localization_state" in pose and pose["localization_state"] >= 2:
                 pose_a = pose
-                # Define the update query
-                query = "UPDATE seeds SET x = ?, y=?, yaw=? WHERE id =1"
-                # Define the values to update and the condition
-                values = [pose_a["x"], pose_a["y"], pose_a["yaw"]]
-                # Execute the query
-                client.write_register(32, values, 1)
-                cursor.execute(query, values)
-                # Commit the changes
-                connection.commit()
-                logging.debug(f"last pose updated to {values}")
+
+                builder.add_32bit_float(pose_a["x"])
+                builder.add_32bit_float(pose_a["y"])
+                builder.add_32bit_float(pose_a["yaw"])
+                registers = builder.to_registers()
+                client.write_registers(address, registers)
+
+                logging.info(
+                    f"seed 0 updated to {pose_a['x']}, {pose_a['y']}, {pose_a['yaw']}"
+                )
                 break
             else:
                 time.sleep(0.5)
@@ -194,60 +198,88 @@ def update_seed_1(host, port):
                     or abs(pose_b["y"] - pose_a["y"]) > 0.005
                     or abs(pose_b["yaw"] - pose_a["yaw"]) > 0.0087
                 ):
-                    # Define the update query
-                    query = "UPDATE seeds SET x = ?, y=?, yaw=? WHERE id =1"
-                    # Define the values to update and the condition
-                    values = (pose_b["x"], pose_b["y"], pose_b["yaw"])
-                    # Execute the query
-                    cursor.execute(query, values)
-                    # Commit the changes
-                    connection.commit()
-                    logging.debug(f"seed 1 updated to {values}")
+                    builder.reset()
+                    builder.add_32bit_float(pose_b["x"])
+                    builder.add_32bit_float(pose_b["y"])
+                    builder.add_32bit_float(pose_b["yaw"])
+                    registers = builder.to_registers()
+                    client.write_registers(address, registers)
+
+                    logging.info(
+                        f"seed 0 updated to {pose_b['x']}, {pose_b['y']}, {pose_b['yaw']}"
+                    )
 
                     pose_a = pose_b
     finally:
-        cursor.close()
-        connection.close()
+        client.close()
 
 
-def teach_or_set_seed(host, port):
+def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_num):
     global pose
-    # Connect to the database
-    connection = sqlite3.connect("locator.db")
-    # Create a cursor object
-    cursor = connection.cursor()
-    # Retrieve the data
-    seeds_a = cursor.execute("SELECT * FROM seeds").fetchall()
+    bits_a = []
+    bits_b = []
+    # Set up the Modbus client
+    client = ModbusTcpClient(host, port)
+    # Connect to the PLC
+    client.connect()
 
+    # Retrieve the data
+    register_count = math.ceil(seed_num*4/16)
+    result = client.read_holding_registers(
+        bits_starting_addr, register_count
+    )
+    decoder = BinaryPayloadDecoder.fromRegisters(
+        result.registers, byteorder=Endian.Little, wordorder=Endian.Little
+    )
+    for i in range(math.ceil(seed_num*4/8)):
+        # bits += decoder.decode_bits()
+        t = decoder.decode_bits()
+        # make a list of [enforceSeed, uncertainSeed, teachSeed, setSeed]
+        bits_a.append(t[:4])
+        bits_a.append(t[4:])
+    logging.info(f"bits_a: {bits_a}")
+    logging.info(f"length of list bits_a: {len(bits_a)}")
+
+    builder = BinaryPayloadBuilder(
+        byteorder=Endian.Little, wordorder=Endian.Little)
     try:
         while True:
             time.sleep(0.5)
+            result = client.read_holding_registers(
+                bits_starting_addr, register_count
+            )
+            for i in range(math.ceil(seed_num*4/8)):
+                # bits += decoder.decode_bits()
+                t = decoder.decode_bits()
+                # make a list of [enforceSeed, uncertainSeed, teachSeed, setSeed]
+                bits_b.append(t[:4])
+                bits_b.append(t[4:])
+            logging.info(f"bits_b: {bits_b}")
+            logging.info(f"length of list bits_b: {len(bits_b)}")
 
-            seeds_b = cursor.execute("SELECT * FROM seeds").fetchall()
-
-            for i in range(len(seeds_b)):
+            for i in range(len(bits_b)):
                 # teach seed
-                if not seeds_a[i][7] and seeds_b[i][7]:
+                if not bits_a[i][2] and bits_b[i][2]:
                     # read current pose from Locator and write it to pose i in the data block
-                    # pose = get_client_localization_pose()
-                    assert pose["localization_state"] >= 2, "NOT_LOCALIZED"
-
-                    # Define the update query
-                    query = "UPDATE seeds SET x = ?, y=?, yaw=?, teach=? WHERE id =?"
+                    pose_current = pose
+                    assert pose_current["localization_state"] >= 2, "NOT_LOCALIZED"
                     # Define the values to update and the condition
-                    values = (pose["x"], pose["y"], pose["yaw"], 0, i + 1)
-                    # Execute the query
-                    cursor.execute(query, values)
-                    # Commit the changes
-                    connection.commit()
-
+                    values = (
+                        pose_current["x"], pose_current["y"], pose_current["yaw"])
+                    builder.add_32bit_float(pose_current["x"])
+                    builder.add_32bit_float(pose_current["y"])
+                    builder.add_32bit_float(pose_current["yaw"])
+                    registers = builder.to_registers()
+                    client.write_registers(poses_starting_addr+i, registers)
+                    # TODO reset bit teachSeed; what does mask do? pymodbus.register_write_message.MaskWriteRegisterResponse
+                    #
                     logging.info(
-                        f"Seed taught, id {seeds_b[i][0]}, name {seeds_b[i][1]}, {values[:3]}"
+                        f"Seed {i} taught, {values}"
                     )
                     break
 
                 # set seed
-                if not seeds_a[i][8] and seeds_b[i][8]:
+                if not bits_a[i][3] and bits_b[i][3]:
                     session_id = sessionLogin()
                     clientLocalizationSetSeed(
                         sessionId=session_id,
@@ -259,7 +291,8 @@ def teach_or_set_seed(host, port):
                     )
                     sessionLogout(session_id)
                     # reset field set in DB table seeds
-                    cursor.execute("UPDATE seeds SET 'set'=? WHERE id=?", (0, i + 1))
+                    cursor.execute(
+                        "UPDATE seeds SET 'set'=? WHERE id=?", (0, i + 1))
 
                     # Commit the changes
                     connection.commit()
@@ -267,31 +300,30 @@ def teach_or_set_seed(host, port):
                         f"Seed set, id {seeds_b[i][0]}, name {seeds_b[i][1]}, x={seeds_b[i][2]}, y={seeds_b[i][3]}, yaw={seeds_b[i][4]}"
                     )
                     break
-            seeds_a = seeds_b
+            bits_a = bits_b
     finally:
-        cursor.close()
-        connection.close()
-
-
-def modbus_client(host, port):
-    # Set up the Modbus client
-    client = ModbusTcpClient(host, port)
-
-    # Connect to the PLC
-    client.connect()
-
-    try:
-        while True:
-            time.sleep(1)
-            # Read the value of a register
-            result = client.read_holding_registers(address=16, count=4)
-            # Print the result
-            print(result.registers[0])
-    except KeyboardInterrupt as e:
-        logging.exception("modbus_client() thread received KeyboardInterrupt")
-    finally:
-        # Close the connection
         client.close()
+
+
+# def modbus_client(host, port):
+#     # Set up the Modbus client
+#     client = ModbusTcpClient(host, port)
+
+#     # Connect to the PLC
+#     client.connect()
+
+#     try:
+#         while True:
+#             time.sleep(1)
+#             # Read the value of a register
+#             result = client.read_holding_registers(address=16, count=4)
+#             # Print the result
+#             print(result.registers)
+#     except KeyboardInterrupt as e:
+#         logging.exception("modbus_client() thread received KeyboardInterrupt")
+#     finally:
+#         # Close the connection
+#         client.close()
 
 
 if __name__ == "__main__":
@@ -348,22 +380,34 @@ if __name__ == "__main__":
     print(config)
 
     url = (
-        "http://" + config["locator_host"] + ":" + str(config["locator_json_rpc_port"])
+        "http://" + config["locator_host"] + ":" +
+        str(config["locator_json_rpc_port"])
     )
 
     # format = "%(asctime)s [%(levelname)s] %(threadName)s %(message)s"
     format = "%(asctime)s [%(levelname)s] %(funcName)s(), %(message)s"
-    logging.basicConfig(format=format, level=logging.INFO, datefmt="%Y-%m-%d %H:%M:%S")
+    logging.basicConfig(format=format, level=logging.INFO,
+                        datefmt="%Y-%m-%d %H:%M:%S")
 
     # x = threading.Thread(target=get_client_localization_pose, daemon=True)
     # logging.info("start thread get_client_localization_pose")
     # x.start()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        # executor.submit(get_client_localization_pose)
-        # executor.submit(update_seed_1, config["plc_host"], config["plc_port"])
-        # executor.submit(teach_or_set_seed, config["plc_host"], config["plc_port"])
-        executor.submit(modbus_client, config["plc_host"], config["plc_port"])
+        executor.submit(
+            get_client_localization_pose,
+            config["locator_host"],
+            config["locator_pose_port"],
+        )
+        executor.submit(
+            update_seed_0,
+            config["plc_host"],
+            config["plc_port"],
+            config["poses_starting_addr"],
+        )
+        executor.submit(teach_or_set_seed, config["plc_host"], config["plc_port"],
+                        config["bits_starting_addr"], config["poses_starting_addr"], config["seed_num"])
+        # executor.submit(modbus_client, config["plc_host"], config["plc_port"])
         try:
             while True:
                 time.sleep(1)
