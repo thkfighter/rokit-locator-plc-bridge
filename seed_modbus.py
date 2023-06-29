@@ -270,7 +270,7 @@ def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_
                     builder.add_32bit_float(pose_current["y"])
                     builder.add_32bit_float(pose_current["yaw"])
                     registers = builder.to_registers()
-                    client.write_registers(poses_starting_addr+i, registers)
+                    client.write_registers(poses_starting_addr+i*6, registers)
                     # TODO reset bit teachSeed; what does mask do? pymodbus.register_write_message.MaskWriteRegisterResponse
                     #
                     logging.info(
@@ -281,9 +281,14 @@ def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_
                 # set seed
                 if not bits_a[i][3] and bits_b[i][3]:
                     session_id = sessionLogin()
+                    result = client.read_holding_registers(
+                        poses_starting_addr+i*6, 6)
+                    decoder = BinaryPayloadDecoder.fromRegisters(
+                        result.registers, byteorder=Endian.Little, wordorder=Endian.Little
+                    )
                     clientLocalizationSetSeed(
                         sessionId=session_id,
-                        x=seeds_b[i][2],
+                        x=decoder.decode,  # TODO
                         y=seeds_b[i][3],
                         a=seeds_b[i][4],
                         enforceSeed=bool(seeds_b[i][5]),
