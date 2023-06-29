@@ -166,19 +166,11 @@ def update_seed_0(host, port, address):
     # Connect to the PLC
     client.connect()
 
-    builder = BinaryPayloadBuilder(
-        byteorder=Endian.Little, wordorder=Endian.Little)
     try:
         while True:
             if "localization_state" in pose and pose["localization_state"] >= 2:
                 pose_a = pose
-
-                builder.add_32bit_float(pose_a["x"])
-                builder.add_32bit_float(pose_a["y"])
-                builder.add_32bit_float(pose_a["yaw"])
-                registers = builder.to_registers()
-                client.write_registers(address, registers)
-
+                mb_set_pose(client, address, pose_a)
                 logging.info(
                     f"seed 0 updated to {pose_a['x']}, {pose_a['y']}, {pose_a['yaw']}"
                 )
@@ -198,13 +190,7 @@ def update_seed_0(host, port, address):
                     or abs(pose_b["y"] - pose_a["y"]) > 0.005
                     or abs(pose_b["yaw"] - pose_a["yaw"]) > 0.0087
                 ):
-                    builder.reset()
-                    builder.add_32bit_float(pose_b["x"])
-                    builder.add_32bit_float(pose_b["y"])
-                    builder.add_32bit_float(pose_b["yaw"])
-                    registers = builder.to_registers()
-                    client.write_registers(address, registers)
-
+                    mb_set_pose(client, address, pose_b)
                     logging.info(
                         f"seed 0 updated to {pose_b['x']}, {pose_b['y']}, {pose_b['yaw']}"
                     )
@@ -214,100 +200,107 @@ def update_seed_0(host, port, address):
         client.close()
 
 
+def mb_set_pose(client, address, pose):
+    builder = BinaryPayloadBuilder(
+        byteorder=Endian.Little, wordorder=Endian.Little)
+    builder.add_32bit_float(pose["x"])
+    builder.add_32bit_float(pose["y"])
+    builder.add_32bit_float(pose["yaw"])
+    registers = builder.to_registers()
+    client.write_registers(address, registers)
+
+
 def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_num):
     global pose
     bits_a = []
     bits_b = []
     # Set up the Modbus client
     client = ModbusTcpClient(host, port)
-    # Connect to the PLC
+    # Connect to the PLC TODO await
     client.connect()
 
     # Retrieve the data
-    register_count = math.ceil(seed_num*4/16)
-    result = client.read_holding_registers(
-        bits_starting_addr, register_count
-    )
-    decoder = BinaryPayloadDecoder.fromRegisters(
-        result.registers, byteorder=Endian.Little, wordorder=Endian.Little
-    )
-    for i in range(math.ceil(seed_num*4/8)):
-        # bits += decoder.decode_bits()
-        t = decoder.decode_bits()
-        # make a list of [enforceSeed, uncertainSeed, teachSeed, setSeed]
-        bits_a.append(t[:4])
-        bits_a.append(t[4:])
-    logging.info(f"bits_a: {bits_a}")
-    logging.info(f"length of list bits_a: {len(bits_a)}")
+    bits_a = mb_get_bits(bits_starting_addr, seed_num, client)
+    logging.debug(f"bits_a, length={len(bits_a)}: {bits_a}")
 
-    builder = BinaryPayloadBuilder(
-        byteorder=Endian.Little, wordorder=Endian.Little)
     try:
         while True:
             time.sleep(0.5)
-            result = client.read_holding_registers(
-                bits_starting_addr, register_count
-            )
-            for i in range(math.ceil(seed_num*4/8)):
-                # bits += decoder.decode_bits()
-                t = decoder.decode_bits()
-                # make a list of [enforceSeed, uncertainSeed, teachSeed, setSeed]
-                bits_b.append(t[:4])
-                bits_b.append(t[4:])
-            logging.info(f"bits_b: {bits_b}")
-            logging.info(f"length of list bits_b: {len(bits_b)}")
-
+            bits_b = mb_get_bits(bits_starting_addr, seed_num, client)
+            logging.debug(f"bits_b, length={len(bits_b)}: {bits_b}")
             for i in range(len(bits_b)):
                 # teach seed
                 if not bits_a[i][2] and bits_b[i][2]:
                     # read current pose from Locator and write it to pose i in the data block
                     pose_current = pose
                     assert pose_current["localization_state"] >= 2, "NOT_LOCALIZED"
-                    # Define the values to update and the condition
-                    values = (
-                        pose_current["x"], pose_current["y"], pose_current["yaw"])
-                    builder.add_32bit_float(pose_current["x"])
-                    builder.add_32bit_float(pose_current["y"])
-                    builder.add_32bit_float(pose_current["yaw"])
-                    registers = builder.to_registers()
-                    client.write_registers(poses_starting_addr+i*6, registers)
+                    mb_set_pose(client, poses_starting_addr+i*6, pose_current)
                     # TODO reset bit teachSeed; what does mask do? pymodbus.register_write_message.MaskWriteRegisterResponse
-                    #
+                    bits_b[i][2] = False
                     logging.info(
-                        f"Seed {i} taught, {values}"
+                        f"Seed {i} taught, {pose_current['x']}, {pose_current['y']}, {pose_current['yaw']}"
                     )
                     break
 
                 # set seed
                 if not bits_a[i][3] and bits_b[i][3]:
                     session_id = sessionLogin()
-                    result = client.read_holding_registers(
-                        poses_starting_addr+i*6, 6)
-                    decoder = BinaryPayloadDecoder.fromRegisters(
-                        result.registers, byteorder=Endian.Little, wordorder=Endian.Little
-                    )
+                    pose_x, pose_y, pose_yaw = mb_get_pose(
+                        poses_starting_addr, i, client)
                     clientLocalizationSetSeed(
                         sessionId=session_id,
-                        x=decoder.decode,  # TODO
-                        y=seeds_b[i][3],
-                        a=seeds_b[i][4],
-                        enforceSeed=bool(seeds_b[i][5]),
-                        uncertainSeed=bool(seeds_b[i][6]),
+                        x=pose_x,
+                        y=pose_y,
+                        a=pose_yaw,
+                        enforceSeed=bits_b[i][0],
+                        uncertainSeed=bits_b[i][1],
                     )
                     sessionLogout(session_id)
-                    # reset field set in DB table seeds
-                    cursor.execute(
-                        "UPDATE seeds SET 'set'=? WHERE id=?", (0, i + 1))
-
-                    # Commit the changes
-                    connection.commit()
+                    # TODO reset setSeed
+                    bits_b[i][3] = False
                     logging.info(
-                        f"Seed set, id {seeds_b[i][0]}, name {seeds_b[i][1]}, x={seeds_b[i][2]}, y={seeds_b[i][3]}, yaw={seeds_b[i][4]}"
+                        f"Seed {i} set, x={pose_x}, y={pose_y}, yaw={pose_yaw}"
                     )
                     break
             bits_a = bits_b
+
+            bits_b_ = [item for sublist in bits_b for item in sublist]
+            builder = BinaryPayloadBuilder(
+                byteorder=Endian.Little, wordorder=Endian.Little)
+            builder.add_bits(bits_b_)
+            registers = builder.to_registers()
+            client.write_registers(bits_starting_addr, registers)
     finally:
         client.close()
+
+
+def mb_get_pose(poses_starting_addr, i, client):
+    result = client.read_holding_registers(
+        poses_starting_addr+i*6, 6)
+    decoder = BinaryPayloadDecoder.fromRegisters(
+        result.registers, byteorder=Endian.Little, wordorder=Endian.Little
+    )
+    pose_x = decoder.decode_32bit_float()
+    pose_y = decoder.decode_32bit_float()
+    pose_yaw = decoder.decode_32bit_float()
+    return pose_x, pose_y, pose_yaw
+
+
+def mb_get_bits(bits_starting_addr, seed_num, client):
+    bits = []
+    bits_register_count = math.ceil(seed_num*4/16)
+    result = client.read_holding_registers(
+        bits_starting_addr, bits_register_count
+    )
+    decoder = BinaryPayloadDecoder.fromRegisters(
+        result.registers, byteorder=Endian.Little, wordorder=Endian.Little
+    )
+    for i in range(math.ceil(seed_num*4/8)):
+        t = decoder.decode_bits()
+        # make a list of [enforceSeed, uncertainSeed, teachSeed, setSeed]
+        bits.append(t[:4])
+        bits.append(t[4:])
+    return bits
 
 
 # def modbus_client(host, port):
