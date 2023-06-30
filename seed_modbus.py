@@ -17,12 +17,13 @@ import requests
 import json
 import math
 import concurrent.futures
-from pymodbus.client import ModbusTcpClient
+from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.constants import Endian
 from pymodbus.exceptions import ParameterException
 from pymodbus.payload import BinaryPayloadDecoder, BinaryPayloadBuilder
 import bitstring
 from bitstring import BitArray
+import asyncio
 
 # import threading
 
@@ -160,13 +161,13 @@ def sessionLogout(sessionId: str = None):
     logging.debug(response.json())
 
 
-def update_seed_0(host, port, address):
+async def update_seed_0(host, port, address):
     """Update the first seed in table seeds of locator.db"""
     global pose
     # Set up the Modbus client
-    client = ModbusTcpClient(host, port)
+    client = AsyncModbusTcpClient(host, port)
     # Connect to the PLC
-    client.connect()
+    await client.connect()
 
     try:
         while True:
@@ -212,14 +213,14 @@ def mb_set_pose(client, address, pose):
     client.write_registers(address, registers)
 
 
-def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_num):
+async def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_num):
     global pose
     bits_a = []
     bits_b = []
     # Set up the Modbus client
-    client = ModbusTcpClient(host, port)
-    # Connect to the PLC TODO await
-    client.connect()
+    client = AsyncModbusTcpClient(host, port)
+    # Connect to the PLC TODO reconnect
+    await client.connect()
 
     # Retrieve the data
     bits_a = mb_get_bits(bits_starting_addr, seed_num, client)
