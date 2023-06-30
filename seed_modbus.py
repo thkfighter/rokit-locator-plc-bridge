@@ -13,7 +13,7 @@ from datetime import datetime
 import time
 import logging
 import requests
-import sqlite3
+# import sqlite3
 import json
 import math
 import concurrent.futures
@@ -21,6 +21,8 @@ from pymodbus.client import ModbusTcpClient
 from pymodbus.constants import Endian
 from pymodbus.exceptions import ParameterException
 from pymodbus.payload import BinaryPayloadDecoder, BinaryPayloadBuilder
+import bitstring
+from bitstring import BitArray
 
 # import threading
 
@@ -221,29 +223,33 @@ def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_
 
     # Retrieve the data
     bits_a = mb_get_bits(bits_starting_addr, seed_num, client)
-    logging.debug(f"bits_a, length={len(bits_a)}: {bits_a}")
 
     try:
         while True:
             time.sleep(0.5)
             bits_b = mb_get_bits(bits_starting_addr, seed_num, client)
+            if bits_b == bits_a:
+                continue
+            logging.debug(f"bits_a, length={len(bits_a)}: {bits_a}")
             logging.debug(f"bits_b, length={len(bits_b)}: {bits_b}")
             for i in range(len(bits_b)):
                 # teach seed
-                if not bits_a[i][2] and bits_b[i][2]:
+                if (not bits_a[i][2] and bits_b[i][2]):
                     # read current pose from Locator and write it to pose i in the data block
                     pose_current = pose
                     assert pose_current["localization_state"] >= 2, "NOT_LOCALIZED"
                     mb_set_pose(client, poses_starting_addr+i*6, pose_current)
-                    # TODO reset bit teachSeed; what does mask do? pymodbus.register_write_message.MaskWriteRegisterResponse
-                    bits_b[i][2] = False
                     logging.info(
                         f"Seed {i} taught, {pose_current['x']}, {pose_current['y']}, {pose_current['yaw']}"
                     )
+                    bits_a = bits_b
+                    # reset bit teachSeed in modbus data block
+                    bits_b[i][2] = False
+                    mb_set_bits(client, bits_starting_addr, bits_b)
                     break
 
                 # set seed
-                if not bits_a[i][3] and bits_b[i][3]:
+                if (not bits_a[i][3] and bits_b[i][3]):
                     session_id = sessionLogin()
                     pose_x, pose_y, pose_yaw = mb_get_pose(
                         poses_starting_addr, i, client)
@@ -255,23 +261,42 @@ def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_
                         enforceSeed=bits_b[i][0],
                         uncertainSeed=bits_b[i][1],
                     )
+                    # TODO if setting seed fails
                     sessionLogout(session_id)
-                    # TODO reset setSeed
-                    bits_b[i][3] = False
                     logging.info(
                         f"Seed {i} set, x={pose_x}, y={pose_y}, yaw={pose_yaw}"
                     )
+                    bits_a = bits_b
+                    # reset bit setSeed in modbus data block
+                    bits_b[i][3] = False
+                    mb_set_bits(client, bits_starting_addr, bits_b)
                     break
+            # bits_b != bits_a, but no changing from False to True
             bits_a = bits_b
 
-            bits_b_ = [item for sublist in bits_b for item in sublist]
-            builder = BinaryPayloadBuilder(
-                byteorder=Endian.Little, wordorder=Endian.Little)
-            builder.add_bits(bits_b_)
-            registers = builder.to_registers()
-            client.write_registers(bits_starting_addr, registers)
     finally:
         client.close()
+
+
+def mb_set_bits(client, bits_starting_addr, bits_list):
+    """_summary_
+
+    Args:
+        bits_starting_addr (uint): _description_
+        bits_list (list): a two-dimentional array
+        client (ModbusTcpClient): _description_
+    """
+    bool_list = [item for sublist in bits_list for item in sublist]
+    bits = BitArray()
+    for bool_val in bool_list:
+        bits.append('0b1' if bool_val else '0b0')
+    builder = BinaryPayloadBuilder(
+        byteorder=Endian.Little, wordorder=Endian.Little)
+    for bits_16 in bits.cut(16):
+        bits_16.reverse()
+        builder.add_16bit_uint(bits_16.uint)
+    registers = builder.to_registers()
+    client.write_registers(bits_starting_addr, registers)
 
 
 def mb_get_pose(poses_starting_addr, i, client):
@@ -287,41 +312,29 @@ def mb_get_pose(poses_starting_addr, i, client):
 
 
 def mb_get_bits(bits_starting_addr, seed_num, client):
-    bits = []
+    bits_list = []
+    bits = BitArray()
     bits_register_count = math.ceil(seed_num*4/16)
     result = client.read_holding_registers(
         bits_starting_addr, bits_register_count
     )
-    decoder = BinaryPayloadDecoder.fromRegisters(
-        result.registers, byteorder=Endian.Little, wordorder=Endian.Little
-    )
-    for i in range(math.ceil(seed_num*4/8)):
-        t = decoder.decode_bits()
-        # make a list of [enforceSeed, uncertainSeed, teachSeed, setSeed]
-        bits.append(t[:4])
-        bits.append(t[4:])
-    return bits
-
-
-# def modbus_client(host, port):
-#     # Set up the Modbus client
-#     client = ModbusTcpClient(host, port)
-
-#     # Connect to the PLC
-#     client.connect()
-
-#     try:
-#         while True:
-#             time.sleep(1)
-#             # Read the value of a register
-#             result = client.read_holding_registers(address=16, count=4)
-#             # Print the result
-#             print(result.registers)
-#     except KeyboardInterrupt as e:
-#         logging.exception("modbus_client() thread received KeyboardInterrupt")
-#     finally:
-#         # Close the connection
-#         client.close()
+    # decoder = BinaryPayloadDecoder.fromRegisters(
+    #     result.registers, byteorder=Endian.Little, wordorder=Endian.Little
+    # )
+    for register in result.registers:
+        bit_16 = BitArray(uint=register, length=16)
+        bit_16.reverse()
+        bits.append(bit_16)
+    for bit_4 in bits.cut(4):
+        bit_4_list = [bit == '1' for bit in bit_4.bin]
+        bits_list.append(bit_4_list)
+    logging.debug(bits_list)
+    # for i in range(math.ceil(seed_num*4/8)):
+    #     t = decoder.decode_bits()
+    #     # make a list of [enforceSeed, uncertainSeed, teachSeed, setSeed]
+    #     bits.append(t[:4])
+    #     bits.append(t[4:])
+    return bits_list
 
 
 if __name__ == "__main__":
@@ -405,7 +418,6 @@ if __name__ == "__main__":
         )
         executor.submit(teach_or_set_seed, config["plc_host"], config["plc_port"],
                         config["bits_starting_addr"], config["poses_starting_addr"], config["seed_num"])
-        # executor.submit(modbus_client, config["plc_host"], config["plc_port"])
         try:
             while True:
                 time.sleep(1)
