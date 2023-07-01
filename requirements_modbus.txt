@@ -1,3 +1,4 @@
 requests
 pymodbus
 bitstring==4.1.0b1
+aiohttp
