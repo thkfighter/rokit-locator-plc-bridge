@@ -56,15 +56,15 @@ def get_client_localization_pose(host, port):
         try:
             # Creating a TCP/IP socket
             client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            client.settimeout(5)
+            # client.settimeout(5)
             client.connect((host, port))
-            logging.info(f"Connected to {host}:{port}")
-            logging.info(f"Local address: {client.getsockname}")
-            logging.info(f"Remote address: {client.getpeername}")
+            logging.info(f"Connected to Locator client")
+            logging.info(f"Local address: {client.getsockname()}")
+            logging.info(f"Remote address: {client.getpeername()}")
             # if the connection is successful, break out of the loop
             break
         except OSError:
-            print("Failed to connect. Retrying in 5 seconds...")
+            logging.error("Failed to connect. Retrying in 5 seconds...")
             time.sleep(5)
 
     while True:
@@ -89,18 +89,20 @@ def get_client_localization_pose(host, port):
             }
             logging.debug(pose)
         except OSError:
+            logging.exception(OSError)
             # if there is a socket error, close the socket and start the loop again to try to reconnect
             client.close()
-            print("Socket error. Reconnecting...")
+            logging.error("Socket error. Reconnecting...")
             while True:
                 try:
                     # create a new socket and try to reconnect
                     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    client.settimeout(5)
+                    # client.settimeout(5)
                     client.connect((host, port))
                     break
                 except OSError:
-                    print("Failed to reconnect. Retrying in 5 seconds...")
+                    logging.error(
+                        "Failed to reconnect. Retrying in 5 seconds...")
                     time.sleep(3)
 
 
@@ -183,18 +185,19 @@ def sessionLogout(sessionId: str = None):
 def update_seed_0(host, port, address):
     """Update the first seed in table seeds of locator.db"""
     global pose
+    # Set up the Modbus client
+    client = ModbusTcpClient(host, port)
 
     while True:
-        try:
-            # Set up the Modbus client
-            client = ModbusTcpClient(host, port)
-            # Connect to the PLC
-            client.connect()
+        if client.connect():
+            logging.info("Modbus slave connected.")
             break
-        except ConnectionException:
+        else:
             # if there is a socket error, wait for 5 seconds before trying again
-            print("Failed to connect to modbus slave. Retrying in 5 seconds...")
+            logging.warning(
+                "Failed to connect to modbus slave. Retrying in 5 seconds...")
             time.sleep(5)
+            continue
 
     while True:
         try:
@@ -231,33 +234,33 @@ def update_seed_0(host, port, address):
             # logging.exception(e)
             client.close()
             while True:
-                try:
-                    # Set up the Modbus client
-                    client = ModbusTcpClient(host, port)
-                    # Connect to the PLC
-                    client.connect()
+                if client.connect():
+                    print("Modbus slave connected.")
                     break
-                except ConnectionException:
+                else:
                     # if there is a socket error, wait for 5 seconds before trying again
                     print("Failed to connect to modbus slave. Retrying in 5 seconds...")
-                    time.sleep(3)
+                    time.sleep(5)
+                    continue
 
 
 def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_num):
     global pose
     bits_a = []
     bits_b = []
+    # Set up the Modbus client
+    client = ModbusTcpClient(host, port)
 
     while True:
-        try:
-            # Set up the Modbus client
-            client = ModbusTcpClient(host, port, timeout=5)
-            client.connect()
+        if client.connect():
+            logging.info("Modbus slave connected.")
             break
-        except:
+        else:
             # if there is a socket error, wait for 5 seconds before trying again
-            print("Failed to connect to modbus slave. Retrying in 5 seconds...")
+            logging.warning(
+                "Failed to connect to modbus slave. Retrying in 5 seconds...")
             time.sleep(5)
+            continue
 
     while True:
         try:
@@ -317,16 +320,14 @@ def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_
             # logging.exception(e)
             client.close()
             while True:
-                try:
-                    # Set up the Modbus client
-                    client = ModbusTcpClient(host, port)
-                    # Connect to the PLC
-                    client.connect()
+                if client.connect():
+                    print("Modbus slave connected.")
                     break
-                except ConnectionException:
+                else:
                     # if there is a socket error, wait for 5 seconds before trying again
                     print("Failed to connect to modbus slave. Retrying in 5 seconds...")
-                    time.sleep(3)
+                    time.sleep(5)
+                    continue
 
 
 def mb_get_pose(poses_starting_addr, i, client):
@@ -471,14 +472,14 @@ if __name__ == "__main__":
             config["locator_host"],
             config["locator_pose_port"],
         )
-        executor.submit(
-            update_seed_0,
-            config["plc_host"],
-            config["plc_port"],
-            config["poses_starting_addr"],
-        )
-        executor.submit(teach_or_set_seed, config["plc_host"], config["plc_port"],
-                        config["bits_starting_addr"], config["poses_starting_addr"], config["seed_num"])
+        # executor.submit(
+        #     update_seed_0,
+        #     config["plc_host"],
+        #     config["plc_port"],
+        #     config["poses_starting_addr"],
+        # )
+        # executor.submit(teach_or_set_seed, config["plc_host"], config["plc_port"],
+        #                 config["bits_starting_addr"], config["poses_starting_addr"], config["seed_num"])
         try:
             while True:
                 time.sleep(1)

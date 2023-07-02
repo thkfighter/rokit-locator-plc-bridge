@@ -8,8 +8,7 @@ client = ModbusTcpClient(host, port)
 
 while True:
     # Set up the Modbus client
-    client.connect()
-    if client.connected:
+    if client.connect():
         print("connected")
         break
     else:
