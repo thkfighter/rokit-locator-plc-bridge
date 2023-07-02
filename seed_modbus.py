@@ -23,6 +23,7 @@ from pymodbus.exceptions import ParameterException, ConnectionException
 from pymodbus.payload import BinaryPayloadDecoder, BinaryPayloadBuilder
 import bitstring
 from bitstring import BitArray
+import sys
 
 # import threading
 
@@ -64,8 +65,13 @@ def get_client_localization_pose(host, port):
             # if the connection is successful, break out of the loop
             break
         except OSError:
-            logging.error("Failed to connect. Retrying in 5 seconds...")
+            logging.error(
+                f"Failed to connect to {client.getpeername()}. Retrying in 5 seconds...")
             time.sleep(5)
+        except KeyboardInterrupt:
+            if client:
+                client.close()
+            sys.exit()
 
     while True:
         try:
@@ -104,6 +110,10 @@ def get_client_localization_pose(host, port):
                     logging.error(
                         "Failed to reconnect. Retrying in 5 seconds...")
                     time.sleep(3)
+        except KeyboardInterrupt:
+            if client:
+                client.close()
+            sys.exit()
 
 
 def clientLocalizationSetSeed(
@@ -485,5 +495,9 @@ if __name__ == "__main__":
                 time.sleep(1)
         except KeyboardInterrupt:
             print("Main thread received KeyboardInterrupt")
-            executor.shutdown(wait=True)
+            executor.shutdown(wait=False)
+            # executor.shutdown()
             print("All threads completed")
+            # TODO shutdown does not work
+            # sys.exit()
+            raise SystemExit
