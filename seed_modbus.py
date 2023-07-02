@@ -13,6 +13,7 @@ from datetime import datetime
 import time
 import logging
 import requests
+
 # import sqlite3
 import json
 import math
@@ -66,7 +67,8 @@ def get_client_localization_pose(host, port):
             break
         except OSError:
             logging.error(
-                f"Failed to connect to {client.getpeername()}. Retrying in 5 seconds...")
+                f"Failed to connect to {client.getpeername()}. Retrying in 5 seconds..."
+            )
             time.sleep(5)
         except KeyboardInterrupt:
             if client:
@@ -94,8 +96,12 @@ def get_client_localization_pose(host, port):
                 "localization_state": unpacked_data[3],
             }
             logging.debug(pose)
-        except OSError:
-            logging.exception(OSError)
+        except KeyboardInterrupt:
+            if client:
+                client.close()
+            sys.exit()
+        except Exception:
+            logging.exception(Exception)
             # if there is a socket error, close the socket and start the loop again to try to reconnect
             client.close()
             logging.error("Socket error. Reconnecting...")
@@ -107,13 +113,8 @@ def get_client_localization_pose(host, port):
                     client.connect((host, port))
                     break
                 except OSError:
-                    logging.error(
-                        "Failed to reconnect. Retrying in 5 seconds...")
-                    time.sleep(3)
-        except KeyboardInterrupt:
-            if client:
-                client.close()
-            sys.exit()
+                    logging.error("Failed to reconnect. Retrying in 5 seconds...")
+                    time.sleep(5)
 
 
 def clientLocalizationSetSeed(
@@ -205,7 +206,8 @@ def update_seed_0(host, port, address):
         else:
             # if there is a socket error, wait for 5 seconds before trying again
             logging.warning(
-                "Failed to connect to modbus slave. Retrying in 5 seconds...")
+                "Failed to connect to modbus slave. Retrying in 5 seconds..."
+            )
             time.sleep(5)
             continue
 
@@ -245,11 +247,13 @@ def update_seed_0(host, port, address):
             client.close()
             while True:
                 if client.connect():
-                    print("Modbus slave connected.")
+                    logging.info("Modbus slave connected.")
                     break
                 else:
                     # if there is a socket error, wait for 5 seconds before trying again
-                    print("Failed to connect to modbus slave. Retrying in 5 seconds...")
+                    logging.warning(
+                        "Failed to connect to modbus slave. Retrying in 5 seconds..."
+                    )
                     time.sleep(5)
                     continue
 
@@ -268,7 +272,8 @@ def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_
         else:
             # if there is a socket error, wait for 5 seconds before trying again
             logging.warning(
-                "Failed to connect to modbus slave. Retrying in 5 seconds...")
+                "Failed to connect to modbus slave. Retrying in 5 seconds..."
+            )
             time.sleep(5)
             continue
 
@@ -286,12 +291,11 @@ def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_
                 logging.debug(f"bits_b, length={len(bits_b)}: {bits_b}")
                 for i in range(len(bits_b)):
                     # teach seed
-                    if (not bits_a[i][2] and bits_b[i][2]):
+                    if not bits_a[i][2] and bits_b[i][2]:
                         # read current pose from Locator and write it to pose i in the data block
                         pose_current = pose
                         assert pose_current["localization_state"] >= 2, "NOT_LOCALIZED"
-                        mb_set_pose(client, poses_starting_addr +
-                                    i*6, pose_current)
+                        mb_set_pose(client, poses_starting_addr + i * 6, pose_current)
                         logging.info(
                             f"Seed {i} taught, {pose_current['x']}, {pose_current['y']}, {pose_current['yaw']}"
                         )
@@ -302,10 +306,11 @@ def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_
                         break
 
                     # set seed
-                    if (not bits_a[i][3] and bits_b[i][3]):
+                    if not bits_a[i][3] and bits_b[i][3]:
                         session_id = sessionLogin()
                         pose_x, pose_y, pose_yaw = mb_get_pose(
-                            poses_starting_addr, i, client)
+                            poses_starting_addr, i, client
+                        )
                         clientLocalizationSetSeed(
                             sessionId=session_id,
                             x=pose_x,
@@ -331,18 +336,19 @@ def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_
             client.close()
             while True:
                 if client.connect():
-                    print("Modbus slave connected.")
+                    logging.info("Modbus slave connected.")
                     break
                 else:
                     # if there is a socket error, wait for 5 seconds before trying again
-                    print("Failed to connect to modbus slave. Retrying in 5 seconds...")
+                    logging.warning(
+                        "Failed to connect to modbus slave. Retrying in 5 seconds..."
+                    )
                     time.sleep(5)
                     continue
 
 
 def mb_get_pose(poses_starting_addr, i, client):
-    result = client.read_holding_registers(
-        poses_starting_addr+i*6, 6)
+    result = client.read_holding_registers(poses_starting_addr + i * 6, 6)
     decoder = BinaryPayloadDecoder.fromRegisters(
         result.registers, byteorder=Endian.Little, wordorder=Endian.Little
     )
@@ -353,8 +359,7 @@ def mb_get_pose(poses_starting_addr, i, client):
 
 
 def mb_set_pose(client, address, pose):
-    builder = BinaryPayloadBuilder(
-        byteorder=Endian.Little, wordorder=Endian.Little)
+    builder = BinaryPayloadBuilder(byteorder=Endian.Little, wordorder=Endian.Little)
     builder.add_32bit_float(pose["x"])
     builder.add_32bit_float(pose["y"])
     builder.add_32bit_float(pose["yaw"])
@@ -365,10 +370,8 @@ def mb_set_pose(client, address, pose):
 def mb_get_bits(bits_starting_addr, seed_num, client):
     bits_list = []
     bits = BitArray()
-    bits_register_count = math.ceil(seed_num*4/16)
-    result = client.read_holding_registers(
-        bits_starting_addr, bits_register_count
-    )
+    bits_register_count = math.ceil(seed_num * 4 / 16)
+    result = client.read_holding_registers(bits_starting_addr, bits_register_count)
     # decoder = BinaryPayloadDecoder.fromRegisters(
     #     result.registers, byteorder=Endian.Little, wordorder=Endian.Little
     # )
@@ -377,7 +380,7 @@ def mb_get_bits(bits_starting_addr, seed_num, client):
         bit_16.reverse()
         bits.append(bit_16)
     for bit_4 in bits.cut(4):
-        bit_4_list = [bit == '1' for bit in bit_4.bin]
+        bit_4_list = [bit == "1" for bit in bit_4.bin]
         bits_list.append(bit_4_list)
     logging.debug(bits_list)
     # for i in range(math.ceil(seed_num*4/8)):
@@ -399,9 +402,8 @@ def mb_set_bits(client, bits_starting_addr, bits_list):
     bool_list = [item for sublist in bits_list for item in sublist]
     bits = BitArray()
     for bool_val in bool_list:
-        bits.append('0b1' if bool_val else '0b0')
-    builder = BinaryPayloadBuilder(
-        byteorder=Endian.Little, wordorder=Endian.Little)
+        bits.append("0b1" if bool_val else "0b0")
+    builder = BinaryPayloadBuilder(byteorder=Endian.Little, wordorder=Endian.Little)
     for bits_16 in bits.cut(16):
         bits_16.reverse()
         builder.add_16bit_uint(bits_16.uint)
@@ -463,14 +465,12 @@ if __name__ == "__main__":
     print(config)
 
     url = (
-        "http://" + config["locator_host"] + ":" +
-        str(config["locator_json_rpc_port"])
+        "http://" + config["locator_host"] + ":" + str(config["locator_json_rpc_port"])
     )
 
     # format = "%(asctime)s [%(levelname)s] %(threadName)s %(message)s"
     format = "%(asctime)s [%(levelname)s] %(funcName)s(), %(message)s"
-    logging.basicConfig(format=format, level=logging.INFO,
-                        datefmt="%Y-%m-%d %H:%M:%S")
+    logging.basicConfig(format=format, level=logging.INFO, datefmt="%Y-%m-%d %H:%M:%S")
 
     # x = threading.Thread(target=get_client_localization_pose, daemon=True)
     # logging.info("start thread get_client_localization_pose")
@@ -482,14 +482,20 @@ if __name__ == "__main__":
             config["locator_host"],
             config["locator_pose_port"],
         )
-        # executor.submit(
-        #     update_seed_0,
-        #     config["plc_host"],
-        #     config["plc_port"],
-        #     config["poses_starting_addr"],
-        # )
-        # executor.submit(teach_or_set_seed, config["plc_host"], config["plc_port"],
-        #                 config["bits_starting_addr"], config["poses_starting_addr"], config["seed_num"])
+        executor.submit(
+            update_seed_0,
+            config["plc_host"],
+            config["plc_port"],
+            config["poses_starting_addr"],
+        )
+        executor.submit(
+            teach_or_set_seed,
+            config["plc_host"],
+            config["plc_port"],
+            config["bits_starting_addr"],
+            config["poses_starting_addr"],
+            config["seed_num"],
+        )
         try:
             while True:
                 time.sleep(1)
