@@ -19,7 +19,7 @@ import math
 import concurrent.futures
 from pymodbus.client import ModbusTcpClient
 from pymodbus.constants import Endian
-from pymodbus.exceptions import ParameterException
+from pymodbus.exceptions import ParameterException, ConnectionException
 from pymodbus.payload import BinaryPayloadDecoder, BinaryPayloadBuilder
 import bitstring
 from bitstring import BitArray
@@ -52,17 +52,25 @@ pose = {}
 def get_client_localization_pose(host, port):
     """Receive localization poses from ROKIT Locator and save them to a global variable, pose"""
     global pose
-    # Creating a TCP/IP socket
-    client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # Connect to the server
-    server_address = (host, port)
-    client_sock.connect(server_address)
-    logging.info(f"Connected to {host}:{port}")
+    while True:
+        try:
+            # Creating a TCP/IP socket
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client.settimeout(5)
+            client.connect((host, port))
+            logging.info(f"Connected to {host}:{port}")
+            logging.info(f"Local address: {client.getsockname}")
+            logging.info(f"Remote address: {client.getpeername}")
+            # if the connection is successful, break out of the loop
+            break
+        except OSError:
+            print("Failed to connect. Retrying in 5 seconds...")
+            time.sleep(5)
 
-    try:
-        while True:
+    while True:
+        try:
             # read the socket
-            data = client_sock.recv(unpacker.size)
+            data = client.recv(unpacker.size)
             # upack the data (= interpret the datagram)
             if not data:
                 continue
@@ -80,8 +88,20 @@ def get_client_localization_pose(host, port):
                 "localization_state": unpacked_data[3],
             }
             logging.debug(pose)
-    finally:
-        client_sock.close()
+        except OSError:
+            # if there is a socket error, close the socket and start the loop again to try to reconnect
+            client.close()
+            print("Socket error. Reconnecting...")
+            while True:
+                try:
+                    # create a new socket and try to reconnect
+                    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    client.settimeout(5)
+                    client.connect((host, port))
+                    break
+                except OSError:
+                    print("Failed to reconnect. Retrying in 5 seconds...")
+                    time.sleep(3)
 
 
 def clientLocalizationSetSeed(
@@ -163,140 +183,150 @@ def sessionLogout(sessionId: str = None):
 def update_seed_0(host, port, address):
     """Update the first seed in table seeds of locator.db"""
     global pose
-    # Set up the Modbus client
-    client = ModbusTcpClient(host, port)
-    # Connect to the PLC
-    client.connect()
 
-    try:
-        while True:
-            if "localization_state" in pose and pose["localization_state"] >= 2:
-                pose_a = pose
-                mb_set_pose(client, address, pose_a)
-                logging.info(
-                    f"seed 0 updated to {pose_a['x']}, {pose_a['y']}, {pose_a['yaw']}"
-                )
-                break
-            else:
-                time.sleep(0.5)
-                continue
+    while True:
+        try:
+            # Set up the Modbus client
+            client = ModbusTcpClient(host, port)
+            # Connect to the PLC
+            client.connect()
+            break
+        except ConnectionException:
+            # if there is a socket error, wait for 5 seconds before trying again
+            print("Failed to connect to modbus slave. Retrying in 5 seconds...")
+            time.sleep(5)
 
-        while True:
-            time.sleep(0.5)
-            if "localization_state" in pose and pose["localization_state"] >= 2:
-                pose_b = pose
-                # update last pose on the first row of table seeds
-                # units: meter and radian, 0.0087 radians = 0.5 degrees
-                if (
-                    abs(pose_b["x"] - pose_a["x"]) > 0.005
-                    or abs(pose_b["y"] - pose_a["y"]) > 0.005
-                    or abs(pose_b["yaw"] - pose_a["yaw"]) > 0.0087
-                ):
-                    mb_set_pose(client, address, pose_b)
+    while True:
+        try:
+            # initialize seed 0 if pose has a localization status greater than 1
+            while True:
+                if "localization_state" in pose and pose["localization_state"] >= 2:
+                    pose_a = pose
+                    mb_set_pose(client, address, pose_a)
                     logging.info(
-                        f"seed 0 updated to {pose_b['x']}, {pose_b['y']}, {pose_b['yaw']}"
+                        f"seed 0 updated to {pose_a['x']}, {pose_a['y']}, {pose_a['yaw']}"
                     )
+                    break
+                else:
+                    time.sleep(0.5)
+                    continue
+            # loop to update seed 0 if poses change more than specified values
+            while True:
+                time.sleep(0.5)
+                if "localization_state" in pose and pose["localization_state"] >= 2:
+                    pose_b = pose
+                    # units: meter and radian, 0.0087 radians = 0.5 degrees
+                    if (
+                        abs(pose_b["x"] - pose_a["x"]) > 0.005
+                        or abs(pose_b["y"] - pose_a["y"]) > 0.005
+                        or abs(pose_b["yaw"] - pose_a["yaw"]) > 0.0087
+                    ):
+                        mb_set_pose(client, address, pose_b)
+                        logging.info(
+                            f"seed 0 updated to {pose_b['x']}, {pose_b['y']}, {pose_b['yaw']}"
+                        )
 
-                    pose_a = pose_b
-    finally:
-        client.close()
-
-
-def mb_set_pose(client, address, pose):
-    builder = BinaryPayloadBuilder(
-        byteorder=Endian.Little, wordorder=Endian.Little)
-    builder.add_32bit_float(pose["x"])
-    builder.add_32bit_float(pose["y"])
-    builder.add_32bit_float(pose["yaw"])
-    registers = builder.to_registers()
-    client.write_registers(address, registers)
+                        pose_a = pose_b
+        except ConnectionException:
+            # logging.exception(e)
+            client.close()
+            while True:
+                try:
+                    # Set up the Modbus client
+                    client = ModbusTcpClient(host, port)
+                    # Connect to the PLC
+                    client.connect()
+                    break
+                except ConnectionException:
+                    # if there is a socket error, wait for 5 seconds before trying again
+                    print("Failed to connect to modbus slave. Retrying in 5 seconds...")
+                    time.sleep(3)
 
 
 def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_num):
     global pose
     bits_a = []
     bits_b = []
-    # Set up the Modbus client
-    client = ModbusTcpClient(host, port)
-    # Connect to the PLC TODO await
-    client.connect()
 
-    # Retrieve the data
-    bits_a = mb_get_bits(bits_starting_addr, seed_num, client)
+    while True:
+        try:
+            # Set up the Modbus client
+            client = ModbusTcpClient(host, port, timeout=5)
+            client.connect()
+            break
+        except:
+            # if there is a socket error, wait for 5 seconds before trying again
+            print("Failed to connect to modbus slave. Retrying in 5 seconds...")
+            time.sleep(5)
 
-    try:
-        while True:
-            time.sleep(0.5)
-            bits_b = mb_get_bits(bits_starting_addr, seed_num, client)
-            if bits_b == bits_a:
-                continue
-            logging.debug(f"bits_a, length={len(bits_a)}: {bits_a}")
-            logging.debug(f"bits_b, length={len(bits_b)}: {bits_b}")
-            for i in range(len(bits_b)):
-                # teach seed
-                if (not bits_a[i][2] and bits_b[i][2]):
-                    # read current pose from Locator and write it to pose i in the data block
-                    pose_current = pose
-                    assert pose_current["localization_state"] >= 2, "NOT_LOCALIZED"
-                    mb_set_pose(client, poses_starting_addr+i*6, pose_current)
-                    logging.info(
-                        f"Seed {i} taught, {pose_current['x']}, {pose_current['y']}, {pose_current['yaw']}"
-                    )
-                    bits_a = bits_b
-                    # reset bit teachSeed in modbus data block
-                    bits_b[i][2] = False
-                    mb_set_bits(client, bits_starting_addr, bits_b)
+    while True:
+        try:
+            # Retrieve the data
+            bits_a = mb_get_bits(bits_starting_addr, seed_num, client)
+
+            while True:
+                time.sleep(0.5)
+                bits_b = mb_get_bits(bits_starting_addr, seed_num, client)
+                if bits_b == bits_a:
+                    continue
+                logging.debug(f"bits_a, length={len(bits_a)}: {bits_a}")
+                logging.debug(f"bits_b, length={len(bits_b)}: {bits_b}")
+                for i in range(len(bits_b)):
+                    # teach seed
+                    if (not bits_a[i][2] and bits_b[i][2]):
+                        # read current pose from Locator and write it to pose i in the data block
+                        pose_current = pose
+                        assert pose_current["localization_state"] >= 2, "NOT_LOCALIZED"
+                        mb_set_pose(client, poses_starting_addr +
+                                    i*6, pose_current)
+                        logging.info(
+                            f"Seed {i} taught, {pose_current['x']}, {pose_current['y']}, {pose_current['yaw']}"
+                        )
+                        bits_a = bits_b
+                        # reset bit teachSeed in modbus data block
+                        bits_b[i][2] = False
+                        mb_set_bits(client, bits_starting_addr, bits_b)
+                        break
+
+                    # set seed
+                    if (not bits_a[i][3] and bits_b[i][3]):
+                        session_id = sessionLogin()
+                        pose_x, pose_y, pose_yaw = mb_get_pose(
+                            poses_starting_addr, i, client)
+                        clientLocalizationSetSeed(
+                            sessionId=session_id,
+                            x=pose_x,
+                            y=pose_y,
+                            a=pose_yaw,
+                            enforceSeed=bits_b[i][0],
+                            uncertainSeed=bits_b[i][1],
+                        )
+                        # TODO if setting seed fails
+                        sessionLogout(session_id)
+                        logging.info(
+                            f"Seed {i} set, x={pose_x}, y={pose_y}, yaw={pose_yaw}"
+                        )
+                        bits_a = bits_b
+                        # reset bit setSeed in modbus data block
+                        bits_b[i][3] = False
+                        mb_set_bits(client, bits_starting_addr, bits_b)
+                        break
+                # bits_b != bits_a, but no changing from False to True
+                bits_a = bits_b
+        except ConnectionException:
+            # logging.exception(e)
+            client.close()
+            while True:
+                try:
+                    # Set up the Modbus client
+                    client = ModbusTcpClient(host, port)
+                    # Connect to the PLC
+                    client.connect()
                     break
-
-                # set seed
-                if (not bits_a[i][3] and bits_b[i][3]):
-                    session_id = sessionLogin()
-                    pose_x, pose_y, pose_yaw = mb_get_pose(
-                        poses_starting_addr, i, client)
-                    clientLocalizationSetSeed(
-                        sessionId=session_id,
-                        x=pose_x,
-                        y=pose_y,
-                        a=pose_yaw,
-                        enforceSeed=bits_b[i][0],
-                        uncertainSeed=bits_b[i][1],
-                    )
-                    # TODO if setting seed fails
-                    sessionLogout(session_id)
-                    logging.info(
-                        f"Seed {i} set, x={pose_x}, y={pose_y}, yaw={pose_yaw}"
-                    )
-                    bits_a = bits_b
-                    # reset bit setSeed in modbus data block
-                    bits_b[i][3] = False
-                    mb_set_bits(client, bits_starting_addr, bits_b)
-                    break
-            # bits_b != bits_a, but no changing from False to True
-            bits_a = bits_b
-
-    finally:
-        client.close()
-
-
-def mb_set_bits(client, bits_starting_addr, bits_list):
-    """_summary_
-
-    Args:
-        bits_starting_addr (uint): _description_
-        bits_list (list): a two-dimentional array
-        client (ModbusTcpClient): _description_
-    """
-    bool_list = [item for sublist in bits_list for item in sublist]
-    bits = BitArray()
-    for bool_val in bool_list:
-        bits.append('0b1' if bool_val else '0b0')
-    builder = BinaryPayloadBuilder(
-        byteorder=Endian.Little, wordorder=Endian.Little)
-    for bits_16 in bits.cut(16):
-        bits_16.reverse()
-        builder.add_16bit_uint(bits_16.uint)
-    registers = builder.to_registers()
-    client.write_registers(bits_starting_addr, registers)
+                except ConnectionException:
+                    # if there is a socket error, wait for 5 seconds before trying again
+                    print("Failed to connect to modbus slave. Retrying in 5 seconds...")
+                    time.sleep(3)
 
 
 def mb_get_pose(poses_starting_addr, i, client):
@@ -309,6 +339,16 @@ def mb_get_pose(poses_starting_addr, i, client):
     pose_y = decoder.decode_32bit_float()
     pose_yaw = decoder.decode_32bit_float()
     return pose_x, pose_y, pose_yaw
+
+
+def mb_set_pose(client, address, pose):
+    builder = BinaryPayloadBuilder(
+        byteorder=Endian.Little, wordorder=Endian.Little)
+    builder.add_32bit_float(pose["x"])
+    builder.add_32bit_float(pose["y"])
+    builder.add_32bit_float(pose["yaw"])
+    registers = builder.to_registers()
+    client.write_registers(address, registers)
 
 
 def mb_get_bits(bits_starting_addr, seed_num, client):
@@ -335,6 +375,27 @@ def mb_get_bits(bits_starting_addr, seed_num, client):
     #     bits.append(t[:4])
     #     bits.append(t[4:])
     return bits_list
+
+
+def mb_set_bits(client, bits_starting_addr, bits_list):
+    """_summary_
+
+    Args:
+        bits_starting_addr (uint): _description_
+        bits_list (list): a two-dimentional array
+        client (ModbusTcpClient): _description_
+    """
+    bool_list = [item for sublist in bits_list for item in sublist]
+    bits = BitArray()
+    for bool_val in bool_list:
+        bits.append('0b1' if bool_val else '0b0')
+    builder = BinaryPayloadBuilder(
+        byteorder=Endian.Little, wordorder=Endian.Little)
+    for bits_16 in bits.cut(16):
+        bits_16.reverse()
+        builder.add_16bit_uint(bits_16.uint)
+    registers = builder.to_registers()
+    client.write_registers(bits_starting_addr, registers)
 
 
 if __name__ == "__main__":
