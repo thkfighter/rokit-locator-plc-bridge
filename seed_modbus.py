@@ -195,7 +195,7 @@ def sessionLogout(sessionId: str = None):
     logging.debug(response.json())
 
 
-def update_seed_0(host, port, address):
+def update_seed_0(host, port, address, byte_order, word_order):
     """Update the first seed in table seeds of locator.db"""
     global pose
     # Set up the Modbus client
@@ -219,7 +219,7 @@ def update_seed_0(host, port, address):
             while True:
                 if "localization_state" in pose and pose["localization_state"] >= 2:
                     pose_a = pose
-                    mb_set_pose(client, address, pose_a)
+                    mb_set_pose(client, address, pose_a, byte_order, word_order)
                     logging.info(
                         f"seed 0 updated to {pose_a['x']}, {pose_a['y']}, {pose_a['yaw']}"
                     )
@@ -238,7 +238,7 @@ def update_seed_0(host, port, address):
                         or abs(pose_b["y"] - pose_a["y"]) > 0.005
                         or abs(pose_b["yaw"] - pose_a["yaw"]) > 0.0087
                     ):
-                        mb_set_pose(client, address, pose_b)
+                        mb_set_pose(client, address, pose_b, byte_order, word_order)
                         logging.info(
                             f"seed 0 updated to {pose_b['x']}, {pose_b['y']}, {pose_b['yaw']}"
                         )
@@ -260,7 +260,15 @@ def update_seed_0(host, port, address):
                     continue
 
 
-def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_num):
+def teach_or_set_seed(
+    host,
+    port,
+    bits_starting_addr,
+    poses_starting_addr,
+    seed_num,
+    byte_order,
+    word_order,
+):
     global pose
     bits_a = []
     bits_b = []
@@ -282,11 +290,15 @@ def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_
     while True:
         try:
             # Retrieve the data
-            bits_a = mb_get_bits(bits_starting_addr, seed_num, client)
+            bits_a = mb_get_bits(
+                bits_starting_addr, seed_num, client, byte_order, word_order
+            )
 
             while True:
                 time.sleep(0.5)
-                bits_b = mb_get_bits(bits_starting_addr, seed_num, client)
+                bits_b = mb_get_bits(
+                    bits_starting_addr, seed_num, client, byte_order, word_order
+                )
                 if bits_b == bits_a:
                     continue
                 logging.debug(f"bits_a, length={len(bits_a)}: {bits_a}")
@@ -297,21 +309,35 @@ def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_
                         # read current pose from Locator and write it to pose i in the data block
                         pose_current = pose
                         assert pose_current["localization_state"] >= 2, "NOT_LOCALIZED"
-                        mb_set_pose(client, poses_starting_addr + i * 6, pose_current)
+                        mb_set_pose(
+                            client,
+                            poses_starting_addr + i * 6,
+                            pose_current,
+                            byte_order,
+                            word_order,
+                        )
                         logging.info(
                             f"Seed {i} taught, {pose_current['x']}, {pose_current['y']}, {pose_current['yaw']}"
                         )
                         bits_a = bits_b
                         # reset bit teachSeed in modbus data block
                         bits_b[i][2] = False
-                        mb_set_bits(client, bits_starting_addr, bits_b)
+                        mb_set_bits(
+                            client, bits_starting_addr, bits_b, byte_order, word_order
+                        )
                         break
 
                     # set seed
                     if not bits_a[i][3] and bits_b[i][3]:
                         session_id = sessionLogin()
                         pose_x, pose_y, pose_yaw = mb_get_pose(
-                            poses_starting_addr, i, client
+                            poses_starting_addr,
+                            i,
+                            client,
+                            byte_order,
+                            word_order,
+                            byte_order,
+                            word_order,
                         )
                         clientLocalizationSetSeed(
                             sessionId=session_id,
@@ -329,7 +355,9 @@ def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_
                         bits_a = bits_b
                         # reset bit setSeed in modbus data block
                         bits_b[i][3] = False
-                        mb_set_bits(client, bits_starting_addr, bits_b)
+                        mb_set_bits(
+                            client, bits_starting_addr, bits_b, byte_order, word_order
+                        )
                         break
                 # bits_b != bits_a, but no changing from False to True
                 bits_a = bits_b
@@ -349,10 +377,10 @@ def teach_or_set_seed(host, port, bits_starting_addr, poses_starting_addr, seed_
                     continue
 
 
-def mb_get_pose(poses_starting_addr, i, client):
+def mb_get_pose(poses_starting_addr, i, client, byte_order, word_order):
     result = client.read_holding_registers(poses_starting_addr + i * 6, 6)
     decoder = BinaryPayloadDecoder.fromRegisters(
-        result.registers, byteorder=Endian.Little, wordorder=Endian.Little
+        result.registers, byteorder=byte_order, wordorder=word_order
     )
     pose_x = decoder.decode_32bit_float()
     pose_y = decoder.decode_32bit_float()
@@ -360,8 +388,8 @@ def mb_get_pose(poses_starting_addr, i, client):
     return pose_x, pose_y, pose_yaw
 
 
-def mb_set_pose(client, address, pose):
-    builder = BinaryPayloadBuilder(byteorder=Endian.Little, wordorder=Endian.Little)
+def mb_set_pose(client, address, pose, byte_order, word_order):
+    builder = BinaryPayloadBuilder(byteorder=byte_order, wordorder=word_order)
     builder.add_32bit_float(pose["x"])
     builder.add_32bit_float(pose["y"])
     builder.add_32bit_float(pose["yaw"])
@@ -369,13 +397,13 @@ def mb_set_pose(client, address, pose):
     client.write_registers(address, registers)
 
 
-def mb_get_bits(bits_starting_addr, seed_num, client):
+def mb_get_bits(bits_starting_addr, seed_num, client, byte_order, word_order):
     bits_list = []
     bits = BitArray()
     bits_register_count = math.ceil(seed_num * 4 / 16)
     result = client.read_holding_registers(bits_starting_addr, bits_register_count)
     # decoder = BinaryPayloadDecoder.fromRegisters(
-    #     result.registers, byteorder=Endian.Little, wordorder=Endian.Little
+    #     result.registers, byteorder=byte_order, wordorder=word_order
     # )
     for register in result.registers:
         bit_16 = BitArray(uint=register, length=16)
@@ -393,7 +421,7 @@ def mb_get_bits(bits_starting_addr, seed_num, client):
     return bits_list
 
 
-def mb_set_bits(client, bits_starting_addr, bits_list):
+def mb_set_bits(client, bits_starting_addr, bits_list, byte_order, word_order):
     """_summary_
 
     Args:
@@ -405,7 +433,7 @@ def mb_set_bits(client, bits_starting_addr, bits_list):
     bits = BitArray()
     for bool_val in bool_list:
         bits.append("0b1" if bool_val else "0b0")
-    builder = BinaryPayloadBuilder(byteorder=Endian.Little, wordorder=Endian.Little)
+    builder = BinaryPayloadBuilder(byteorder=byte_order, wordorder=word_order)
     for bits_16 in bits.cut(16):
         bits_16.reverse()
         builder.add_16bit_uint(bits_16.uint)
