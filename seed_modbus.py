@@ -41,6 +41,8 @@ config = {
     "bits_starting_addr": 16,
     "poses_starting_addr": 32,
     "seed_num": 16,
+    "byte_order": ">",
+    "word_order": ">",
 }
 
 # ClientLocalizationPoseDatagram data structure (see API manual)
@@ -453,6 +455,18 @@ if __name__ == "__main__":
         default=config["locator_json_rpc_port"],
         help="Port of JSON RPC ROKIT Locator Client",
     )
+    parser.add_argument(
+        "--byte_order",
+        type=str,
+        default=config["byte_order"],
+        help="< Endian.Little, > Endian.Big",
+    )
+    parser.add_argument(
+        "--word_order",
+        type=str,
+        default=config["word_order"],
+        help="< Endian.Little, > Endian.Big",
+    )
 
     args = parser.parse_args()
     # config.json has the highest priority and it will overide other command-line arguments
@@ -487,6 +501,8 @@ if __name__ == "__main__":
             config["plc_host"],
             config["plc_port"],
             config["poses_starting_addr"],
+            config["byte_order"],
+            config["word_order"],
         )
         executor.submit(
             teach_or_set_seed,
@@ -495,6 +511,8 @@ if __name__ == "__main__":
             config["bits_starting_addr"],
             config["poses_starting_addr"],
             config["seed_num"],
+            config["byte_order"],
+            config["word_order"],
         )
         try:
             while True:
