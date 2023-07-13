@@ -22,10 +22,10 @@ from pymodbus.client import ModbusTcpClient
 from pymodbus.constants import Endian
 from pymodbus.exceptions import ParameterException, ConnectionException
 from pymodbus.payload import BinaryPayloadDecoder, BinaryPayloadBuilder
-import bitstring
 from bitstring import BitArray
 import sys
 
+# import bitstring
 # import threading
 
 
