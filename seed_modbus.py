@@ -331,13 +331,7 @@ def teach_or_set_seed(
                     if not bits_a[i][3] and bits_b[i][3]:
                         session_id = sessionLogin()
                         pose_x, pose_y, pose_yaw = mb_get_pose(
-                            poses_starting_addr,
-                            i,
-                            client,
-                            byte_order,
-                            word_order,
-                            byte_order,
-                            word_order,
+                            poses_starting_addr, i, client, byte_order, word_order
                         )
                         clientLocalizationSetSeed(
                             sessionId=session_id,

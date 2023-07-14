@@ -18,6 +18,27 @@ seed.py是ROKIT Locator位姿（坐标和方向）初始化的示例程序，主
 
 ## 使用说明
 
+配置文件config.json
+```
+{
+    "user_name" : "admin",
+    "password" : "admin",
+    "locator_host" : "127.0.0.1",
+    "locator_pose_port" : 9011,
+    "locator_json_rpc_port" : 8080,
+    "plc_host": "192.168.8.71",
+    "plc_port": 502,
+    "bits_starting_addr": 16,
+    "poses_starting_addr": 32,
+    "seed_num": 16,
+    "byte_order": ">",
+    "word_order": "<"
+}
+```
+
+"byte_order": ">", "word_order": "<"  对应Modbus Poll中的"Little-endian byte swap".
+
+
 ```
 $ python seed_modbus.py -h
 usage: seed_modbus.py [-h] [-c CONFIG] [--user_name USER_NAME] [--password PASSWORD] [--locator_host LOCATOR_HOST] [--locator_pose_port LOCATOR_POSE_PORT] [--locator_json_rpc_port LOCATOR_JSON_RPC_PORT]

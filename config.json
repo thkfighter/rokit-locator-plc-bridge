@@ -10,5 +10,5 @@
     "poses_starting_addr": 32,
     "seed_num": 16,
     "byte_order": ">",
-    "word_order": ">"
+    "word_order": "<"
 }
