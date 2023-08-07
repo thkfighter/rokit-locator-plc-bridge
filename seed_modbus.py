@@ -42,7 +42,8 @@ config = {
     "poses_starting_addr": 32,
     "seed_num": 16,
     "byte_order": ">",
-    "word_order": ">",
+    "word_order": "<",
+    "debug": 0
 }
 
 # ClientLocalizationPoseDatagram data structure (see API manual)
@@ -285,7 +286,6 @@ def teach_or_set_seed(
                 "Failed to connect to modbus slave. Retrying in 5 seconds..."
             )
             time.sleep(5)
-            continue
 
     while True:
         try:
@@ -293,6 +293,7 @@ def teach_or_set_seed(
             bits_a = mb_get_bits(
                 bits_starting_addr, seed_num, client, byte_order, word_order
             )
+            logging.info(f"bits_a, length={len(bits_a)}: {bits_a}")
 
             while True:
                 time.sleep(0.5)
@@ -301,8 +302,8 @@ def teach_or_set_seed(
                 )
                 if bits_b == bits_a:
                     continue
-                logging.debug(f"bits_a, length={len(bits_a)}: {bits_a}")
-                logging.debug(f"bits_b, length={len(bits_b)}: {bits_b}")
+                logging.info(f"bits_a, length={len(bits_a)}: {bits_a}")
+                logging.info(f"bits_b, length={len(bits_b)}: {bits_b}")
                 for i in range(len(bits_b)):
                     # teach seed
                     if not bits_a[i][2] and bits_b[i][2]:
@@ -319,9 +320,9 @@ def teach_or_set_seed(
                         logging.info(
                             f"Seed {i} taught, {pose_current['x']}, {pose_current['y']}, {pose_current['yaw']}"
                         )
-                        bits_a = bits_b
                         # reset bit teachSeed in modbus data block
                         bits_b[i][2] = False
+                        logging.info(f"bits_b, length={len(bits_b)}: {bits_b}")
                         mb_set_bits(
                             client, bits_starting_addr, bits_b, byte_order, word_order
                         )
@@ -346,7 +347,6 @@ def teach_or_set_seed(
                         logging.info(
                             f"Seed {i} set, x={pose_x}, y={pose_y}, yaw={pose_yaw}"
                         )
-                        bits_a = bits_b
                         # reset bit setSeed in modbus data block
                         bits_b[i][3] = False
                         mb_set_bits(
@@ -406,7 +406,7 @@ def mb_get_bits(bits_starting_addr, seed_num, client, byte_order, word_order):
     for bit_4 in bits.cut(4):
         bit_4_list = [bit == "1" for bit in bit_4.bin]
         bits_list.append(bit_4_list)
-    logging.debug(bits_list)
+    # logging.debug(bits_list)
     # for i in range(math.ceil(seed_num*4/8)):
     #     t = decoder.decode_bits()
     #     # make a list of [enforceSeed, uncertainSeed, teachSeed, setSeed]
@@ -489,6 +489,12 @@ if __name__ == "__main__":
         default=config["word_order"],
         help="< Endian.Little, > Endian.Big",
     )
+    parser.add_argument(
+        "--debug",
+        type=int,
+        default=config["debug"],
+        help="0: logging.INFO, 1: logging.DEBUG",
+    )
 
     args = parser.parse_args()
     # config.json has the highest priority and it will overide other command-line arguments
@@ -506,7 +512,7 @@ if __name__ == "__main__":
 
     # format = "%(asctime)s [%(levelname)s] %(threadName)s %(message)s"
     format = "%(asctime)s [%(levelname)s] %(funcName)s(), %(message)s"
-    logging.basicConfig(format=format, level=logging.INFO, datefmt="%Y-%m-%d %H:%M:%S")
+    logging.basicConfig(format=format, level=logging.DEBUG if config["debug"] else logging.INFO, datefmt="%Y-%m-%d %H:%M:%S")
 
     # x = threading.Thread(target=get_client_localization_pose, daemon=True)
     # logging.info("start thread get_client_localization_pose")
