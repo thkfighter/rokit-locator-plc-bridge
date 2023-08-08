@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 #
 # Created On: 2023-06-18
-# Copyright (c) 2023 Shanghai Bosch Rexroth Hydraulics & Automation Ltd.
+# SPDX-FileCopyrightText: Copyright (c) 2023 Shanghai Bosch Rexroth Hydraulics & Automation Ltd.
+# SPDX-License-Identifier: MIT
 #
 # https://realpython.com/intro-to-python-threading/#producer-consumer-using-lock
 
@@ -43,7 +44,7 @@ config = {
     "seed_num": 16,
     "byte_order": ">",
     "word_order": "<",
-    "debug": 0
+    "debug": 0,
 }
 
 # ClientLocalizationPoseDatagram data structure (see API manual)
@@ -512,7 +513,11 @@ if __name__ == "__main__":
 
     # format = "%(asctime)s [%(levelname)s] %(threadName)s %(message)s"
     format = "%(asctime)s [%(levelname)s] %(funcName)s(), %(message)s"
-    logging.basicConfig(format=format, level=logging.DEBUG if config["debug"] else logging.INFO, datefmt="%Y-%m-%d %H:%M:%S")
+    logging.basicConfig(
+        format=format,
+        level=logging.DEBUG if config["debug"] else logging.INFO,
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
     # x = threading.Thread(target=get_client_localization_pose, daemon=True)
     # logging.info("start thread get_client_localization_pose")

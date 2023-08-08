@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 #
 # Created On: 2023-06-18
-# Copyright (c) 2023 Shanghai Bosch Rexroth Hydraulics & Automation Ltd.
+# SPDX-FileCopyrightText: Copyright (c) 2023 Shanghai Bosch Rexroth Hydraulics & Automation Ltd.
+# SPDX-License-Identifier: MIT
 #
 # https://realpython.com/intro-to-python-threading/#producer-consumer-using-lock
 

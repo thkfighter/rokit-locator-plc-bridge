@@ -161,7 +161,7 @@ seed存储在西门子PLC.
 
 # 4 Packaging
 
-pyinstaller
+Package with pyinstaller.
 
 ```
 # Use specific version of python on different versions of Ubuntu, otherwise issues may arise. 
