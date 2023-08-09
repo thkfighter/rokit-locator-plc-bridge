@@ -228,7 +228,7 @@ def update_seed_0(host, port, address, byte_order, word_order):
                     break
                 else:
                     time.sleep(0.5)
-                    continue
+
             # loop to update seed 0 if poses change more than specified values
             while True:
                 time.sleep(0.5)
@@ -244,14 +244,13 @@ def update_seed_0(host, port, address, byte_order, word_order):
                         logging.info(
                             f"seed 0 updated to {pose_b['x']}, {pose_b['y']}, {pose_b['yaw']}"
                         )
-
                         pose_a = pose_b
-        except ConnectionException:
+        except Exception:
             # logging.exception(e)
             client.close()
             while True:
                 if client.connect():
-                    logging.info("Modbus slave connected.")
+                    logging.info("Modbus slave reconnected.")
                     break
                 else:
                     # if there is a socket error, wait for 5 seconds before trying again
@@ -259,7 +258,6 @@ def update_seed_0(host, port, address, byte_order, word_order):
                         "Failed to connect to modbus slave. Retrying in 5 seconds..."
                     )
                     time.sleep(5)
-                    continue
 
 
 def teach_or_set_seed(
@@ -277,19 +275,20 @@ def teach_or_set_seed(
     # Set up the Modbus client
     client = ModbusTcpClient(host, port)
 
-    while True:
-        if client.connect():
-            logging.info("Modbus slave connected.")
-            break
-        else:
-            # if there is a socket error, wait for 5 seconds before trying again
-            logging.warning(
-                "Failed to connect to modbus slave. Retrying in 5 seconds..."
-            )
-            time.sleep(5)
+    # while True:
+    #     if client.connect():
+    #         logging.info("Modbus slave connected.")
+    #         break
+    #     else:
+    #         # if there is a socket error, wait for 5 seconds before trying again
+    #         logging.warning(
+    #             "Failed to connect to modbus slave. Retrying in 5 seconds..."
+    #         )
+    #         time.sleep(5)
 
     while True:
         try:
+            assert client.connect()
             # Retrieve the data
             bits_a = mb_get_bits(
                 bits_starting_addr, seed_num, client, byte_order, word_order
@@ -298,6 +297,7 @@ def teach_or_set_seed(
 
             while True:
                 time.sleep(0.5)
+                assert client.connect()
                 bits_b = mb_get_bits(
                     bits_starting_addr, seed_num, client, byte_order, word_order
                 )
@@ -325,7 +325,11 @@ def teach_or_set_seed(
                         bits_b[i][2] = False
                         logging.info(f"bits_b, length={len(bits_b)}: {bits_b}")
                         mb_set_bits(
-                            client, bits_starting_addr, bits_b, byte_order, word_order
+                            client,
+                            bits_starting_addr,
+                            bits_b,
+                            byte_order,
+                            word_order,
                         )
                         break
 
@@ -351,25 +355,32 @@ def teach_or_set_seed(
                         # reset bit setSeed in modbus data block
                         bits_b[i][3] = False
                         mb_set_bits(
-                            client, bits_starting_addr, bits_b, byte_order, word_order
+                            client,
+                            bits_starting_addr,
+                            bits_b,
+                            byte_order,
+                            word_order,
                         )
                         break
                 # bits_b != bits_a, but no changing from False to True
                 bits_a = bits_b
-        except ConnectionException:
-            # logging.exception(e)
-            client.close()
-            while True:
-                if client.connect():
-                    logging.info("Modbus slave connected.")
-                    break
-                else:
-                    # if there is a socket error, wait for 5 seconds before trying again
-                    logging.warning(
-                        "Failed to connect to modbus slave. Retrying in 5 seconds..."
-                    )
-                    time.sleep(5)
-                    continue
+        except (AssertionError, ConnectionException):
+            logging.info("Connection error: Reconnect in 5 seconds...")
+            time.sleep(5)
+            # client.connect()  # Attempt to reconnect
+        # except Exception:
+        #     # logging.exception(e)
+        #     client.close()
+        #     while True:
+        #         if client.connect():
+        #             logging.info("Modbus slave reconnected.")
+        #             break
+        #         else:
+        #             # if there is a socket error, wait for 5 seconds before trying again
+        #             logging.warning(
+        #                 "Failed to connect to modbus slave. Retrying in 5 seconds..."
+        #             )
+        #             time.sleep(5)
 
 
 def mb_get_pose(poses_starting_addr, i, client, byte_order, word_order):
@@ -396,7 +407,10 @@ def mb_get_bits(bits_starting_addr, seed_num, client, byte_order, word_order):
     bits_list = []
     bits = BitArray()
     bits_register_count = math.ceil(seed_num * 4 / 16)
-    result = client.read_holding_registers(bits_starting_addr, bits_register_count)
+    try:
+        result = client.read_holding_registers(bits_starting_addr, bits_register_count)
+    except Exception as e:
+        raise e
     # decoder = BinaryPayloadDecoder.fromRegisters(
     #     result.registers, byteorder=byte_order, wordorder=word_order
     # )
@@ -433,7 +447,10 @@ def mb_set_bits(client, bits_starting_addr, bits_list, byte_order, word_order):
         bits_16.reverse()
         builder.add_16bit_uint(bits_16.uint)
     registers = builder.to_registers()
-    client.write_registers(bits_starting_addr, registers)
+    try:
+        client.write_registers(bits_starting_addr, registers)
+    except Exception as e:
+        raise e
 
 
 if __name__ == "__main__":
