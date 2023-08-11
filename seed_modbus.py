@@ -15,19 +15,17 @@ import time
 import logging
 import requests
 
-# import sqlite3
 import json
 import math
-import concurrent.futures
 from pymodbus.client import ModbusTcpClient
-from pymodbus.constants import Endian
-from pymodbus.exceptions import ParameterException, ConnectionException
+
+# from pymodbus.constants import Endian
+from pymodbus.exceptions import ModbusException, ConnectionException
+from pymodbus.pdu import ExceptionResponse
 from pymodbus.payload import BinaryPayloadDecoder, BinaryPayloadBuilder
 from bitstring import BitArray
 import sys
-
-# import bitstring
-# import threading
+import threading
 
 
 # Locator
@@ -275,17 +273,6 @@ def teach_or_set_seed(
     # Set up the Modbus client
     client = ModbusTcpClient(host, port)
 
-    # while True:
-    #     if client.connect():
-    #         logging.info("Modbus slave connected.")
-    #         break
-    #     else:
-    #         # if there is a socket error, wait for 5 seconds before trying again
-    #         logging.warning(
-    #             "Failed to connect to modbus slave. Retrying in 5 seconds..."
-    #         )
-    #         time.sleep(5)
-
     while True:
         try:
             assert client.connect()
@@ -294,6 +281,19 @@ def teach_or_set_seed(
                 bits_starting_addr, seed_num, client, byte_order, word_order
             )
             logging.info(f"bits_a, length={len(bits_a)}: {bits_a}")
+            break
+        except (AssertionError, ConnectionException):
+            logging.info("Connection error: Reconnect in 5 seconds...")
+            time.sleep(3)
+
+    while True:
+        try:
+            # assert client.connect()
+            # # Retrieve the data
+            # bits_a = mb_get_bits(
+            #     bits_starting_addr, seed_num, client, byte_order, word_order
+            # )
+            # logging.info(f"bits_a, length={len(bits_a)}: {bits_a}")
 
             while True:
                 time.sleep(0.5)
@@ -301,7 +301,7 @@ def teach_or_set_seed(
                 bits_b = mb_get_bits(
                     bits_starting_addr, seed_num, client, byte_order, word_order
                 )
-                if bits_b == bits_a:
+                if bits_b is None or bits_b == bits_a:
                     continue
                 logging.info(f"bits_a, length={len(bits_a)}: {bits_a}")
                 logging.info(f"bits_b, length={len(bits_b)}: {bits_b}")
@@ -366,7 +366,7 @@ def teach_or_set_seed(
                 bits_a = bits_b
         except (AssertionError, ConnectionException):
             logging.info("Connection error: Reconnect in 5 seconds...")
-            time.sleep(5)
+            time.sleep(3)
             # client.connect()  # Attempt to reconnect
         # except Exception:
         #     # logging.exception(e)
@@ -408,13 +408,27 @@ def mb_get_bits(bits_starting_addr, seed_num, client, byte_order, word_order):
     bits = BitArray()
     bits_register_count = math.ceil(seed_num * 4 / 16)
     try:
-        result = client.read_holding_registers(bits_starting_addr, bits_register_count)
-    except Exception as e:
-        raise e
+        rr = client.read_holding_registers(bits_starting_addr, bits_register_count)
+    except ModbusException as exc:
+        print(f"Received ModbusException({exc}) from library")
+        # client.close()
+        return
+    if rr.isError():  # pragma no cover
+        print(f"Received Modbus library error({rr})")
+        # client.close()
+        return
+    if isinstance(rr, ExceptionResponse):  # pragma no cover
+        print(f"Received Modbus library exception ({rr})")
+        # THIS IS NOT A PYTHON EXCEPTION, but a valid modbus message
+        client.close()
+
+    # print("close connection")  # pragma no cover
+    # client.close()  # pragma no cover
+
     # decoder = BinaryPayloadDecoder.fromRegisters(
     #     result.registers, byteorder=byte_order, wordorder=word_order
     # )
-    for register in result.registers:
+    for register in rr.registers:
         bit_16 = BitArray(uint=register, length=16)
         bit_16.reverse()
         bits.append(bit_16)
@@ -536,26 +550,26 @@ if __name__ == "__main__":
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    # x = threading.Thread(target=get_client_localization_pose, daemon=True)
-    # logging.info("start thread get_client_localization_pose")
-    # x.start()
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        executor.submit(
-            get_client_localization_pose,
+    x1 = threading.Thread(
+        target=get_client_localization_pose,
+        args=(
             config["locator_host"],
             config["locator_pose_port"],
-        )
-        executor.submit(
-            update_seed_0,
+        ),
+    )
+    x2 = threading.Thread(
+        target=update_seed_0,
+        args=(
             config["plc_host"],
             config["plc_port"],
             config["poses_starting_addr"],
             config["byte_order"],
             config["word_order"],
-        )
-        executor.submit(
-            teach_or_set_seed,
+        ),
+    )
+    x3 = threading.Thread(
+        target=teach_or_set_seed,
+        args=(
             config["plc_host"],
             config["plc_port"],
             config["bits_starting_addr"],
@@ -563,15 +577,11 @@ if __name__ == "__main__":
             config["seed_num"],
             config["byte_order"],
             config["word_order"],
-        )
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            print("Main thread received KeyboardInterrupt")
-            executor.shutdown(wait=False)
-            # executor.shutdown()
-            print("All threads completed")
-            # TODO shutdown does not work
-            # sys.exit()
-            raise SystemExit
+        ),
+    )
+    x1.start()
+    x2.start()
+    x3.start()
+    x1.join()
+    x2.join()
+    x3.join()
