@@ -202,21 +202,10 @@ def update_seed_0(host, port, address, byte_order, word_order):
     client = ModbusTcpClient(host, port)
 
     while True:
-        if client.connect():
-            logging.info("Modbus slave connected.")
-            break
-        else:
-            # if there is a socket error, wait for 5 seconds before trying again
-            logging.warning(
-                "Failed to connect to modbus slave. Retrying in 5 seconds..."
-            )
-            time.sleep(5)
-            continue
-
-    while True:
         try:
             # initialize seed 0 if pose has a localization status greater than 1
             while True:
+                assert client.connect()
                 if "localization_state" in pose and pose["localization_state"] >= 2:
                     pose_a = pose
                     mb_set_pose(client, address, pose_a, byte_order, word_order)
@@ -230,6 +219,7 @@ def update_seed_0(host, port, address, byte_order, word_order):
             # loop to update seed 0 if poses change more than specified values
             while True:
                 time.sleep(0.5)
+                assert client.connect()
                 if "localization_state" in pose and pose["localization_state"] >= 2:
                     pose_b = pose
                     # units: meter and radian, 0.0087 radians = 0.5 degrees
@@ -243,19 +233,9 @@ def update_seed_0(host, port, address, byte_order, word_order):
                             f"seed 0 updated to {pose_b['x']}, {pose_b['y']}, {pose_b['yaw']}"
                         )
                         pose_a = pose_b
-        except Exception:
-            # logging.exception(e)
-            client.close()
-            while True:
-                if client.connect():
-                    logging.info("Modbus slave reconnected.")
-                    break
-                else:
-                    # if there is a socket error, wait for 5 seconds before trying again
-                    logging.warning(
-                        "Failed to connect to modbus slave. Retrying in 5 seconds..."
-                    )
-                    time.sleep(5)
+        except (AssertionError, ConnectionException):
+            logging.info("Connection error: Reconnect in 3 seconds...")
+            time.sleep(3)
 
 
 def teach_or_set_seed(
@@ -288,13 +268,6 @@ def teach_or_set_seed(
 
     while True:
         try:
-            # assert client.connect()
-            # # Retrieve the data
-            # bits_a = mb_get_bits(
-            #     bits_starting_addr, seed_num, client, byte_order, word_order
-            # )
-            # logging.info(f"bits_a, length={len(bits_a)}: {bits_a}")
-
             while True:
                 time.sleep(0.5)
                 assert client.connect()
@@ -367,26 +340,23 @@ def teach_or_set_seed(
         except (AssertionError, ConnectionException):
             logging.info("Connection error: Reconnect in 5 seconds...")
             time.sleep(3)
-            # client.connect()  # Attempt to reconnect
-        # except Exception:
-        #     # logging.exception(e)
-        #     client.close()
-        #     while True:
-        #         if client.connect():
-        #             logging.info("Modbus slave reconnected.")
-        #             break
-        #         else:
-        #             # if there is a socket error, wait for 5 seconds before trying again
-        #             logging.warning(
-        #                 "Failed to connect to modbus slave. Retrying in 5 seconds..."
-        #             )
-        #             time.sleep(5)
 
 
 def mb_get_pose(poses_starting_addr, i, client, byte_order, word_order):
-    result = client.read_holding_registers(poses_starting_addr + i * 6, 6)
+    try:
+        rr = client.read_holding_registers(poses_starting_addr + i * 6, 6)
+    except ModbusException as exc:
+        print(f"Received ModbusException({exc}) from library")
+        return
+    if rr.isError():  # pragma no cover
+        print(f"Received Modbus library error({rr})")
+        return
+    if isinstance(rr, ExceptionResponse):  # pragma no cover
+        print(f"Received Modbus library exception ({rr})")
+        # THIS IS NOT A PYTHON EXCEPTION, but a valid modbus message
+        return
     decoder = BinaryPayloadDecoder.fromRegisters(
-        result.registers, byteorder=byte_order, wordorder=word_order
+        rr.registers, byteorder=byte_order, wordorder=word_order
     )
     pose_x = decoder.decode_32bit_float()
     pose_y = decoder.decode_32bit_float()
@@ -400,7 +370,18 @@ def mb_set_pose(client, address, pose, byte_order, word_order):
     builder.add_32bit_float(pose["y"])
     builder.add_32bit_float(pose["yaw"])
     registers = builder.to_registers()
-    client.write_registers(address, registers)
+    try:
+        rr = client.write_registers(address, registers)
+    except ModbusException as exc:
+        print(f"Received ModbusException({exc}) from library")
+        return
+    if rr.isError():  # pragma no cover
+        print(f"Received Modbus library error({rr})")
+        return
+    if isinstance(rr, ExceptionResponse):  # pragma no cover
+        print(f"Received Modbus library exception ({rr})")
+        # THIS IS NOT A PYTHON EXCEPTION, but a valid modbus message
+        return
 
 
 def mb_get_bits(bits_starting_addr, seed_num, client, byte_order, word_order):
@@ -411,19 +392,14 @@ def mb_get_bits(bits_starting_addr, seed_num, client, byte_order, word_order):
         rr = client.read_holding_registers(bits_starting_addr, bits_register_count)
     except ModbusException as exc:
         print(f"Received ModbusException({exc}) from library")
-        # client.close()
         return
     if rr.isError():  # pragma no cover
         print(f"Received Modbus library error({rr})")
-        # client.close()
         return
     if isinstance(rr, ExceptionResponse):  # pragma no cover
         print(f"Received Modbus library exception ({rr})")
         # THIS IS NOT A PYTHON EXCEPTION, but a valid modbus message
-        client.close()
-
-    # print("close connection")  # pragma no cover
-    # client.close()  # pragma no cover
+        return
 
     # decoder = BinaryPayloadDecoder.fromRegisters(
     #     result.registers, byteorder=byte_order, wordorder=word_order
@@ -462,9 +438,21 @@ def mb_set_bits(client, bits_starting_addr, bits_list, byte_order, word_order):
         builder.add_16bit_uint(bits_16.uint)
     registers = builder.to_registers()
     try:
-        client.write_registers(bits_starting_addr, registers)
-    except Exception as e:
-        raise e
+        # TODO any return?
+        rr = client.write_registers(bits_starting_addr, registers)
+    except ModbusException as exc:
+        print(f"Received ModbusException({exc}) from library")
+        # client.close()
+        return
+    if rr.isError():  # pragma no cover
+        print(f"Received Modbus library error({rr})")
+        # client.close()
+        return
+    if isinstance(rr, ExceptionResponse):  # pragma no cover
+        print(f"Received Modbus library exception ({rr})")
+        # THIS IS NOT A PYTHON EXCEPTION, but a valid modbus message
+        # client.close()
+        return
 
 
 if __name__ == "__main__":
