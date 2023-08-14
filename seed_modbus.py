@@ -56,31 +56,28 @@ pose = {}
 def get_client_localization_pose(host, port):
     """Receive localization poses from ROKIT Locator and save them to a global variable, pose"""
     global pose
-    while True:
-        try:
-            # Creating a TCP/IP socket
-            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            # client.settimeout(5)
-            client.connect((host, port))
-            logging.info(f"Connected to Locator client")
-            logging.info(f"Local address: {client.getsockname()}")
-            logging.info(f"Remote address: {client.getpeername()}")
-            # if the connection is successful, break out of the loop
-            break
-        except OSError:
-            logging.error(
-                f"Failed to connect to {client.getpeername()}. Retrying in 5 seconds..."
-            )
-            time.sleep(5)
-        except KeyboardInterrupt:
-            if client:
-                client.close()
-            sys.exit()
 
+    def connect_socket():
+        while True:
+            try:
+                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                # client.settimeout(5)
+                client.connect((host, port))
+                logging.info(
+                    f"Local address: {client.getsockname()} <-connected-> Remote address: {client.getpeername()}"
+                )
+                return client
+            except ConnectionRefusedError:
+                logging.error("Connection refused. Retrying in 5 seconds...")
+                time.sleep(5)
+
+    cc = connect_socket()
     while True:
         try:
             # read the socket
-            data = client.recv(unpacker.size)
+            data = cc.recv(unpacker.size)
+            # I use "ncat -l 9011" to test
+            # TODO server closes, but recv() does not raise any error
             # upack the data (= interpret the datagram)
             if not data:
                 continue
@@ -98,25 +95,35 @@ def get_client_localization_pose(host, port):
                 "localization_state": unpacked_data[3],
             }
             logging.debug(pose)
-        except KeyboardInterrupt:
-            if client:
-                client.close()
-            sys.exit()
-        except Exception:
-            logging.exception(Exception)
-            # if there is a socket error, close the socket and start the loop again to try to reconnect
-            client.close()
-            logging.error("Socket error. Reconnecting...")
-            while True:
-                try:
-                    # create a new socket and try to reconnect
-                    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    # client.settimeout(5)
-                    client.connect((host, port))
-                    break
-                except OSError:
-                    logging.error("Failed to reconnect. Retrying in 5 seconds...")
-                    time.sleep(5)
+            return pose
+        # except KeyboardInterrupt:
+        #     if cc:
+        #         cc.close()
+        #     sys.exit()
+        except OSError as e:
+            logging.exception(e)
+            time.sleep(5)
+            cc = connect_socket()
+        except struct.error as e:
+            logging.exception(e)
+
+
+def connect_socket():
+    cc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    # if there is a socket error, close the socket and start the loop again to try to reconnect
+    # cc.close()
+    # logging.error("Socket error. Reconnecting...")
+    # while True:
+    #     try:
+    #         # create a new socket and try to reconnect
+    #         cc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    #         # cc.settimeout(5)
+    #         cc.connect((host, port))
+    #         break
+    #     except OSError:
+    #         logging.error("Failed to reconnect. Retrying in 5 seconds...")
+    #         time.sleep(5)
 
 
 def clientLocalizationSetSeed(
