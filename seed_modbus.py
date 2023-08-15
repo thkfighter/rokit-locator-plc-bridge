@@ -61,14 +61,14 @@ def get_client_localization_pose(host, port):
         while True:
             try:
                 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                # client.settimeout(5)
+                client.settimeout(5)  # set a timeout on blocking socket operations
                 client.connect((host, port))
                 logging.info(
                     f"Local address: {client.getsockname()} <-connected-> Remote address: {client.getpeername()}"
                 )
                 return client
-            except ConnectionRefusedError:
-                logging.error("Connection refused. Retrying in 5 seconds...")
+            except ConnectionRefusedError as e:
+                logging.warning(e)
                 time.sleep(5)
 
     cc = connect_socket()
@@ -96,16 +96,16 @@ def get_client_localization_pose(host, port):
             }
             logging.debug(pose)
             return pose
-        # except KeyboardInterrupt:
-        #     if cc:
-        #         cc.close()
-        #     sys.exit()
-        except OSError as e:
-            logging.exception(e)
-            time.sleep(5)
-            cc = connect_socket()
+        except TimeoutError as e:
+            logging.warning(e)
         except struct.error as e:
             logging.exception(e)
+        except OSError as e:
+            logging.exception(e)
+            if cc:
+                cc.close()
+            time.sleep(5)
+            cc = connect_socket()
 
 
 def connect_socket():
