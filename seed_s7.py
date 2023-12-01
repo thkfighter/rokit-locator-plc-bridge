@@ -37,13 +37,13 @@ config = {
     "row_size": 28,
     "pose_size": 24,
     "layout": """
-0.0     enforceSeed         BOOL
-0.1     uncertainSeed       BOOL
-2       x                   LREAL
-10      y                   LREAL
-18      a                   LREAL
-26.0    recordSeed          BOOL
-26.1    setSeed             BOOL
+0.0     enforceSeed     BOOL
+0.1     uncertainSeed   BOOL
+2       x               LREAL
+10      y               LREAL
+18      a               LREAL
+26.0    recordSeed      BOOL
+26.1    setSeed         BOOL
 """,
     "debug": 0,
 }

@@ -12,5 +12,6 @@
     "db_number": 10000,
     "row_size": 28,
     "pose_size": 24,
+    "layout": "\n0.0     enforceSeed     BOOL\n0.1     uncertainSeed   BOOL\n2       x               LREAL\n10      y               LREAL\n18      a               LREAL\n26.0    recordSeed      BOOL\n26.1    setSeed         BOOL\n",
     "debug": 0
 }
