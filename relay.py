@@ -45,7 +45,7 @@ logger.addHandler(f_handler)
 
 # Arguments
 parser = argparse.ArgumentParser(
-    description="works as a relay to retransmit payloads at a specific frequency",
+    description="works as a relay to retransmit poses at a specific frequency",
     formatter_class=argparse.RawDescriptionHelpFormatter,
 )
 parser.add_argument("--frq", type=float, default=frq, help="frequency of package relay")
@@ -61,6 +61,7 @@ parser.add_argument(
 parser.add_argument(
     "--dst_port", type=int, default=dst_port, help="port of destination host"
 )
+parser.print_help()
 args = parser.parse_args()
 if args.frq:
     frq = args.frq

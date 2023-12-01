@@ -303,6 +303,7 @@ if __name__ == "__main__":
         default=LOCATOR_JSON_RPC_PORT,
         help="JSON RPC port of Locator",
     )
+    parser.print_help()
 
     args = parser.parse_args()
     if args.seed_num:

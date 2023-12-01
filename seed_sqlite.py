@@ -309,6 +309,7 @@ if __name__ == "__main__":
         default=config["locator_json_rpc_port"],
         help="Port of JSON RPC ROKIT Locator Client",
     )
+    parser.print_help()
 
     args = parser.parse_args()
     # config.json has the highest priority and it will overide other command-line arguments

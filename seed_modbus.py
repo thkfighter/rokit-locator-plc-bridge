@@ -495,6 +495,7 @@ if __name__ == "__main__":
         default=config["debug"],
         help="0: logging.INFO, 1: logging.DEBUG",
     )
+    parser.print_help()
 
     args = parser.parse_args()
     # config.json has the highest priority and it will overide other command-line arguments
