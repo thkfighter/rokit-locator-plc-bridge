@@ -1,0 +1,16 @@
+{
+    "user_name": "admin",
+    "password": "admin",
+    "locator_host": "127.0.0.1",
+    "locator_pose_port": 9011,
+    "locator_json_rpc_port": 8080,
+    "plc_host": "192.168.8.71",
+    "plc_port": 102,
+    "plc_rack": 0,
+    "plc_slot": 1,
+    "seed_count": 8,
+    "db_number": 10000,
+    "row_size": 28,
+    "pose_size": 24,
+    "debug": 0
+}

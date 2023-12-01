@@ -445,7 +445,7 @@ if __name__ == "__main__":
         "-c",
         "--config",
         type=str,
-        help="The path to the configuration file",
+        help="Configuration file with path",
     )
     parser.add_argument(
         "--user_name",
@@ -504,7 +504,7 @@ if __name__ == "__main__":
             config.update(json.load(f))
     else:
         config.update(vars(args))
-    # parser.print_help()
+
     print(config)
 
     url = (
