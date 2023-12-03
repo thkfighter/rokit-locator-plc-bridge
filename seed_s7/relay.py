@@ -23,13 +23,13 @@ src_port = 9011
 dst_host = ""  # If a socket binds to an empty IP address, it means that the socket is listening on all available network interfaces.
 dst_port = 9511
 
-config = {
-    "frq": 15,
-    "src_host": "192.168.8.76",
-    "src_port": 9011,
-    "dst_host": "",
-    "dst_port": 9511,
-}
+# config = {
+#     "frq": 15,
+#     "src_host": "192.168.8.76",
+#     "src_port": 9011,
+#     "dst_host": "",
+#     "dst_port": 9511,
+# }
 
 # Create a custom logger
 logger = logging.getLogger(__name__)
@@ -56,12 +56,12 @@ parser = argparse.ArgumentParser(
     description="works as a relay to retransmit poses at a specific frequency",
     formatter_class=argparse.RawDescriptionHelpFormatter,
 )
-parser.add_argument(
-    "-c",
-    "--config",
-    type=str,
-    help="Configuration file with path",
-)
+# parser.add_argument(
+#     "-c",
+#     "--config",
+#     type=str,
+#     help="Configuration file with path",
+# )
 parser.add_argument("--frq", type=float, default=frq, help="frequency of package relay")
 parser.add_argument(
     "--src_host", type=str, default=src_host, help="IP address of source host"
@@ -102,13 +102,13 @@ logger.info(f"Frequency: {frq}")
 logger.info(f"Destination host: {dst_host}")
 logger.info(f"Destination port: {dst_port}")
 
-if args.config:
-    with open(args.config, "r") as f:
-        config.update(json.load(f))
-else:
-    config.update(vars(args))
-config_str = json.dumps(config, indent=4)
-print(config_str)
+# if args.config:
+#     with open(args.config, "r") as f:
+#         config.update(json.load(f))
+# else:
+#     config.update(vars(args))
+# config_str = json.dumps(config, indent=4)
+# print(config_str)
 
 # Socket instances
 c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
