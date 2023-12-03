@@ -1,0 +1,23 @@
+name: seed-s7
+summary: A bridge between ROKIT Locator and Siemens S7-1200
+description: |
+  seed-s7 uses poses stored in data block of Siemens S7-1200 to initialize ROKIT Locator.
+  relay works as a relay to retransmit poses at a specific frequency.
+version: 1.0.4
+grade: devel
+confinement: devmode
+base: core22
+
+architectures:
+- build-on: amd64
+- build-on: arm64
+
+apps:
+  seed-s7:
+    command: bin/seed-s7
+    # plugs: [home, network, network-bind, removable-media]
+
+parts:
+  seed-s7:
+    plugin: python
+    source: ./seed_s7.py
