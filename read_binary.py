@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Created On: 2023-06-18
+# Created On: 2023-12-08
 # SPDX-FileCopyrightText: Copyright (c) 2023 Shanghai Bosch Rexroth Hydraulics & Automation Ltd.
 # SPDX-License-Identifier: MIT
-#
-# https://realpython.com/intro-to-python-threading/#producer-consumer-using-lock
+
 
 import socket
 import struct
@@ -17,7 +16,7 @@ import logging
 
 # ClientLocalizationPoseDatagram data structure (see API manual)
 # ClientLocalizationPoseDatagram = struct.Struct("<ddQiQQddddddddddddddQddd")
-unpacker =struct.Struct("<I")
+unpacker = struct.Struct("<I")
 # https://docs.python.org/3/library/struct.html
 # print(datetime.now())
 
@@ -48,7 +47,7 @@ def get_client_control_mode(host, port):
             if not data:
                 continue
             unpacked_data = (unpacker.unpack(data))[0]
-            
+
             # 2-0   LASEROUTPUT
             # 5-3   ALIGN
             # 8-6   REC
@@ -58,7 +57,7 @@ def get_client_control_mode(host, port):
             # 20-18 EXPANDMAP
             # 31-21 Unused
 
-            cm = oct(unpacked_data) 
+            cm = oct(unpacked_data)
             logging.info("Client Control Mode")
             print(f"LASEROUTPUT: {cm[-1]}")
             print(f"ALIGN: {cm[-2]}")
@@ -68,8 +67,6 @@ def get_client_control_mode(host, port):
             print(f"VISUALRECORDING: {cm[-6]}")
             print(f"EXPANDMAP: {cm[-7]}")
 
-        # except TimeoutError as e:
-        #     logging.warning(e)
         except struct.error as e:
             logging.exception(e)
         # except OSError as e:
@@ -81,19 +78,17 @@ def get_client_control_mode(host, port):
             client = connect_socket()
 
 
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="a program to parse binary data",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
     parser.add_argument(
         "--host",
         type=str,
         default="127.0.0.1",
-        help="IP of ROKIT Locator client",
+        # help="IP of ROKIT Locator client",
     )
     parser.add_argument(
         "--port",
@@ -108,25 +103,24 @@ if __name__ == "__main__":
         help="0: logging.INFO, 1: logging.DEBUG",
     )
 
-
     parser.print_help()
 
-    args = parser.parse_args()    
-    
+    args = parser.parse_args()
+
     if args.host:
-        host=args.host
+        host = args.host
     else:
-        host="127.0.0.1"
+        host = "127.0.0.1"
 
     if args.port:
-        port=args.port
+        port = args.port
     else:
         port = 9004
 
     if args.debug:
-        debug=args.debug
+        debug = args.debug
     else:
-        debug=0
+        debug = 0
 
     format = "%(asctime)s [%(levelname)s] %(funcName)s(), %(message)s"
     logging.basicConfig(
@@ -135,4 +129,4 @@ if __name__ == "__main__":
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    get_client_control_mode(host,port)
+    get_client_control_mode(host, port)
