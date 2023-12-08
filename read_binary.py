@@ -88,7 +88,7 @@ if __name__ == "__main__":
         "--host",
         type=str,
         default="127.0.0.1",
-        # help="IP of ROKIT Locator client",
+        help="IP of ROKIT Locator client",
     )
     parser.add_argument(
         "--port",
