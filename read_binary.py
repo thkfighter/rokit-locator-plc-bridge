@@ -15,19 +15,8 @@ import time
 import logging
 
 
-import json
-import math
-from bitstring import BitArray
-
-# from pymodbus.constants import Endian
-
-import sys
-import threading
-
-
-
 # ClientLocalizationPoseDatagram data structure (see API manual)
-# unpacker = struct.Struct("<ddQiQQddddddddddddddQddd")
+# ClientLocalizationPoseDatagram = struct.Struct("<ddQiQQddddddddddddddQddd")
 unpacker =struct.Struct("<I")
 # https://docs.python.org/3/library/struct.html
 # print(datetime.now())
@@ -55,56 +44,29 @@ def get_client_control_mode(host, port):
     while True:
         try:
             data = client.recv(unpacker.size)
+            # print(data)
             if not data:
                 continue
-            # unpacked_data = unpacker.unpack(data)
+            unpacked_data = (unpacker.unpack(data))[0]
             
-# 2-0LASEROUTPUT
-# 5-3ALIGN
-# 8-6REC
-# 11-9LOC
-# 14-12MAP
-# 17-15VISUALRECORDING
-# 20-18EXPANDMAP
-# 31-21Unused
-            # laseroutput = unpacked_data & 0x7
-            # unpacked_data >> 3
-            # align = unpacked_data & 0x7
-            # unpacked_data >> 3
-            # rec = unpacked_data & 0x7
-            # unpacked_data >> 3
-            # loc = unpacked_data & 0x7
-            # unpacked_data >> 3
-            # map = unpacked_data & 0x7
-            # unpacked_data >> 3
-            # visualrecording = unpacked_data & 0x7
-            # unpacked_data >> 3
-            # expandmap = unpacked_data & 0x7
+            # 2-0   LASEROUTPUT
+            # 5-3   ALIGN
+            # 8-6   REC
+            # 11-9  LOC
+            # 14-12 MAP
+            # 17-15 VISUALRECORDING
+            # 20-18 EXPANDMAP
+            # 31-21 Unused
 
-            laseroutput = data & 0x7
-            data >> 3
-            align = data & 0x7
-            data >> 3
-            rec = data & 0x7
-            data >> 3
-            loc = data & 0x7
-            data >> 3
-            map = data & 0x7
-            data >> 3
-            visualrecording = data & 0x7
-            data >> 3
-            expandmap = data & 0x7
-
-            bits = bitarray.bitarray(endian='little')
-            bits.frombytes(data)
-
-            print(f"LASEROUTPUT: {laseroutput}")
-            print(f"ALIGN: {align}")
-            print(f"REC: {rec}")
-            print(f"LOC: {loc}")
-            print(f"MAP: {map}")
-            print(f"VISUALRECORDING: {visualrecording}")
-            print(f"EXPANDMAP: {expandmap}")
+            cm = oct(unpacked_data) 
+            logging.info("Client Control Mode")
+            print(f"LASEROUTPUT: {cm[-1]}")
+            print(f"ALIGN: {cm[-2]}")
+            print(f"REC: {cm[-3]}")
+            print(f"LOC: {cm[-4]}")
+            print(f"MAP: {cm[-5]}")
+            print(f"VISUALRECORDING: {cm[-6]}")
+            print(f"EXPANDMAP: {cm[-7]}")
 
         # except TimeoutError as e:
         #     logging.warning(e)
@@ -112,10 +74,10 @@ def get_client_control_mode(host, port):
             logging.exception(e)
         # except OSError as e:
         except (TimeoutError, OSError) as e:
-            logging.exception(e)
+            # logging.exception(e)
+            time.sleep(1)
             if client:
-                client.close()
-            time.sleep(5)
+                continue
             client = connect_socket()
 
 
@@ -139,20 +101,17 @@ if __name__ == "__main__":
         default=9004,
         help="Port of binary ClientControlMode",
     )
+    parser.add_argument(
+        "--debug",
+        type=int,
+        default=0,
+        help="0: logging.INFO, 1: logging.DEBUG",
+    )
 
 
     parser.print_help()
 
-    args = parser.parse_args()
-    # config.json has the highest priority and it will overide other command-line arguments
-    # if args.config:
-    #     with open(args.config, "r") as f:
-    #         config.update(json.load(f))
-    # else:
-    #     config.update(vars(args))
-
-    # print(config)
-    
+    args = parser.parse_args()    
     
     if args.host:
         host=args.host
@@ -164,12 +123,15 @@ if __name__ == "__main__":
     else:
         port = 9004
 
+    if args.debug:
+        debug=args.debug
+    else:
+        debug=0
 
-    # format = "%(asctime)s [%(levelname)s] %(threadName)s %(message)s"
     format = "%(asctime)s [%(levelname)s] %(funcName)s(), %(message)s"
     logging.basicConfig(
         format=format,
-        level=logging.INFO,
+        level=logging.DEBUG if debug else logging.INFO,
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
