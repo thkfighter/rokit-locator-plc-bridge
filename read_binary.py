@@ -12,6 +12,7 @@ import argparse
 from datetime import datetime
 import time
 import logging
+import json
 
 import requests
 
@@ -146,6 +147,32 @@ def get_client_control_mode(host, port):
 def get_client_localization_pose(host, port):
     """Receive localization poses from ROKIT Locator and save them to a global variable, pose"""
     unpacker = struct.Struct("<ddQiQQddddddddddddddQddd")
+    keys = [
+        "age",
+        "timestamp",
+        "uniqueId",
+        "state",
+        "errorFlags",
+        "infoFlags",
+        "poseX",
+        "poseY",
+        "poseYaw",
+        "covariance_1_1",
+        "covariance_1_2",
+        "covariance_1_3",
+        "covariance_2_2",
+        "covariance_2_3",
+        "covariance_3_3",
+        "poseZ",
+        "quaternion_w",
+        "quaternion_x",
+        "quaternion_y",
+        "quaternion_z",
+        "epoch",
+        "lidarOdoPoseX",
+        "lidarOdoPoseY",
+        "lidarOdoPoseYaw",
+    ]
 
     client = connect_socket(host, port)
     while True:
@@ -153,18 +180,22 @@ def get_client_localization_pose(host, port):
             data = client.recv(unpacker.size)
             if not data:
                 continue
-            unpacked_data = unpacker.unpack(data)
+            values = unpacker.unpack(data)
+
+            ClientLocalizationPoseDatagram = dict(zip(keys, values))
+            json_str = json.dumps(ClientLocalizationPoseDatagram)
+            print(json_str)
 
             # create a json row
             pose = {
-                "timestamp": datetime.fromtimestamp(unpacked_data[1]).strftime(
+                "timestamp": datetime.fromtimestamp(values[1]).strftime(
                     "%d-%m-%Y-%H-%M-%S"
                 ),
-                "x": unpacked_data[6],
-                "y": unpacked_data[7],
-                # 'yaw': math.degrees(unpacked_data[8]),
-                "yaw": unpacked_data[8],
-                "localization_state": unpacked_data[3],
+                "x": values[6],
+                "y": values[7],
+                # 'yaw': math.degrees(values[8]),
+                "yaw": values[8],
+                "localization_state": values[3],
             }
             logging.info(pose)
         # except TimeoutError as e:
