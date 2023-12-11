@@ -13,6 +13,7 @@ from datetime import datetime
 import time
 import logging
 import json
+import os
 
 import requests
 
@@ -123,8 +124,26 @@ def get_client_control_mode(host, port):
             # 20-18 EXPANDMAP
             # 31-21 Unused
 
-            cm = oct(unpacked_data)
             logging.info("Client Control Mode")
+            cm = oct(unpacked_data)
+            # print(cm) # 0o1112111
+
+            # make a dict
+            # values = list(cm)[::-1]
+            # keys = [
+            #     "LASEROUTPUT",
+            #     "ALIGN",
+            #     "REC",
+            #     "LOC",
+            #     "MAP",
+            #     "VISUALRECORDING",
+            #     "EXPANDMAP",
+            # ]
+            # print(values)
+            # cm_dict = dict(zip(keys, values))
+            # cm_dict_int = {key: int(value) for key, value in cm_dict.items()}
+            # print(json.dumps(cm_dict_int, indent=4))
+
             print(f"LASEROUTPUT: {cm[-1]}")
             print(f"ALIGN: {cm[-2]}")
             print(f"REC: {cm[-3]}")
@@ -183,21 +202,23 @@ def get_client_localization_pose(host, port):
             values = unpacker.unpack(data)
 
             ClientLocalizationPoseDatagram = dict(zip(keys, values))
-            json_str = json.dumps(ClientLocalizationPoseDatagram)
+            json_str = json.dumps(ClientLocalizationPoseDatagram, indent=4)
+            # Clear the screen
+            os.system("cls" if os.name == "nt" else "clear")
             print(json_str)
 
             # create a json row
-            pose = {
-                "timestamp": datetime.fromtimestamp(values[1]).strftime(
-                    "%d-%m-%Y-%H-%M-%S"
-                ),
-                "x": values[6],
-                "y": values[7],
-                # 'yaw': math.degrees(values[8]),
-                "yaw": values[8],
-                "localization_state": values[3],
-            }
-            logging.info(pose)
+            # pose = {
+            #     "timestamp": datetime.fromtimestamp(values[1]).strftime(
+            #         "%d-%m-%Y-%H-%M-%S"
+            #     ),
+            #     "x": values[6],
+            #     "y": values[7],
+            #     # 'yaw': math.degrees(values[8]),
+            #     "yaw": values[8],
+            #     "localization_state": values[3],
+            # }
+            # logging.info(pose)
         # except TimeoutError as e:
         #     logging.warning(e)
         except struct.error as e:
