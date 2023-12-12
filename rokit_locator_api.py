@@ -105,6 +105,12 @@ def connect_socket(host, port):
 
 
 def get_client_control_mode(host, port):
+    """ClientControlModeDatagram
+
+    Args:
+        host (str): IP address of ROKIT Locator Client host
+        port (int): port
+    """
     unpacker = struct.Struct("<I")
     client = connect_socket(host, port)
     while True:
@@ -164,7 +170,12 @@ def get_client_control_mode(host, port):
 
 
 def get_client_localization_pose(host, port):
-    """Receive localization poses from ROKIT Locator and save them to a global variable, pose"""
+    """ClientLocalizationPoseDatagram
+
+    Args:
+        host (str): IP address of ROKIT Locator Client host
+        port (int): port
+    """
     unpacker = struct.Struct("<ddQiQQddddddddddddddQddd")
     keys = [
         "age",
