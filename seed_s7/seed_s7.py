@@ -290,7 +290,7 @@ def setSeed(x, y, a, enforceSeed, uncertainSeed):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="works as a protocol converter between Siemens S7-1200 and ROKIT Locator",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
         "-c",

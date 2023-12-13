@@ -54,7 +54,7 @@ logger.addHandler(f_handler)
 # Arguments
 parser = argparse.ArgumentParser(
     description="works as a relay to retransmit poses at a specific frequency",
-    formatter_class=argparse.RawDescriptionHelpFormatter,
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 # parser.add_argument(
 #     "-c",

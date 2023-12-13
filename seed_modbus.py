@@ -438,7 +438,7 @@ def mb_set_bits(client, bits_starting_addr, bits_list, byte_order, word_order):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="a program to teach and set seeds for ROKIT Locator",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
     parser.add_argument(

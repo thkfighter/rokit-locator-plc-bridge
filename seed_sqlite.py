@@ -270,7 +270,7 @@ def teach_or_set_seed():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="a program to teach and set seeds for ROKIT Locator",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
     parser.add_argument(
