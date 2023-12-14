@@ -9,7 +9,7 @@
             "type": "python",
             "request": "launch",
             "program": "${file}",
-            "args": ["--config", "./build/config.json"],
+            "args": ["--frq", "4"],
             "console": "integratedTerminal",
             "justMyCode": true
         }

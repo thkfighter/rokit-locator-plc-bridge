@@ -14,41 +14,22 @@ import time
 import sys
 import logging
 import json
+import errno
 
 
 frq = 15
-src_host = "192.168.8.12"
+src_host = "127.0.0.1"
 src_port = 9011
 
 dst_host = ""  # If a socket binds to an empty IP address, it means that the socket is listening on all available network interfaces.
 dst_port = 9511
 
-# config = {
-#     "frq": 15,
-#     "src_host": "192.168.8.76",
-#     "src_port": 9011,
-#     "dst_host": "",
-#     "dst_port": 9511,
-# }
-
-# Create a custom logger
-logger = logging.getLogger(__name__)
-
-# Create handlers
-c_handler = logging.StreamHandler(sys.stdout)
-f_handler = logging.FileHandler("relay.log")
-c_handler.setLevel(logging.INFO)
-f_handler.setLevel(logging.INFO)
-
-# Create formatters and add it to handlers
-c_format = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-f_format = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-c_handler.setFormatter(c_format)
-f_handler.setFormatter(f_format)
-
-# Add handlers to the logger
-logger.addHandler(c_handler)
-logger.addHandler(f_handler)
+format = "%(asctime)s [%(levelname)s] %(funcName)s(), %(message)s"
+logging.basicConfig(
+    format=format,
+    level=logging.INFO,
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 
 # Arguments
@@ -98,17 +79,11 @@ if args.dst_port:
         raise argparse.ArgumentTypeError("Port number has to be between 1 and 65535")
     dst_port = args.dst_port
 
-logger.info(f"Frequency: {frq}")
-logger.info(f"Destination host: {dst_host}")
-logger.info(f"Destination port: {dst_port}")
-
-# if args.config:
-#     with open(args.config, "r") as f:
-#         config.update(json.load(f))
-# else:
-#     config.update(vars(args))
-# config_str = json.dumps(config, indent=4)
-# print(config_str)
+logging.info(f"Frequency: {frq}")
+logging.info(f"Source host: {src_host}")
+logging.info(f"Source port: {src_port}")
+logging.info(f"Destination host: {dst_host}")
+logging.info(f"Destination port: {dst_port}")
 
 # Socket instances
 c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -116,18 +91,41 @@ s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 # Avoid bind() exception: OSError: [Errno 48] Address already in use
 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 s.bind((dst_host, dst_port))
-s.listen(50)
-logger.info(f"Listening on port {dst_port}")
+s.listen(1)
+c.settimeout(5)
+# s.settimeout(5)
+
 tic = time.perf_counter()
 t_delta = 1.0 / frq
 
 
 while True:
     try:
-        c.connect((src_host, src_port))
-        logger.info("Source host has been connected.")
-        conn, addr = s.accept()
-        logger.info(f"Connected by {addr}")
+        try:
+            c.connect((src_host, src_port))
+            logging.info(f"{c.getsockname()} <-- {c.getpeername()}")
+        except OSError as e:
+            if(e.errno == errno.EISCONN):
+                # print('OSError: [Errno 106] Transport endpoint is already connected')
+                pass
+            else:
+                # Re-raise the exception
+                raise
+
+        try:
+            conn, addr = s.accept()
+            logging.info(f"{s.getsockname()} --> {addr}")
+        except OSError as e:
+            if(e.errno == errno.EISCONN):
+                # print('Socket is already connected')
+                pass
+            elif(e.errno == 107):
+                # print('OSError: [Errno 107] Transport endpoint is not connected')
+                # Re-raise the exception
+                raise
+            else:
+                raise
+
         while True:
             data = c.recv(1024)  # length of pose payload is 188
             if not data:
@@ -136,12 +134,17 @@ while True:
             if (toc - tic) >= t_delta:
                 conn.sendall(data)
                 tic = toc
+                # print('.')
     except KeyboardInterrupt:
         # press ctrl+c to stop the program
         c.close()
         s.close()
-        # logger.info("Caught keyboard interrupt, exiting")
-        logger.exception(KeyboardInterrupt)
+        # logging.info("Caught keyboard interrupt, exiting")
+        logging.exception(KeyboardInterrupt)
         sys.exit("Caught keyboard interrupt, exiting")
+    except OSError as e:
+        logging.exception(e)
+        time.sleep(3)
     except Exception as e:
-        logger.exception(e)
+        logging.exception(e)
+        time.sleep(3)
