@@ -94,6 +94,7 @@ s.bind((dst_host, dst_port))
 s.listen(1)
 c.settimeout(5)
 # s.settimeout(5)
+conn, addr = s.accept()
 
 tic = time.perf_counter()
 t_delta = 1.0 / frq
@@ -105,7 +106,7 @@ while True:
             c.connect((src_host, src_port))
             logging.info(f"{c.getsockname()} <-- {c.getpeername()}")
         except OSError as e:
-            if(e.errno == errno.EISCONN):
+            if e.errno == errno.EISCONN:
                 # print('OSError: [Errno 106] Transport endpoint is already connected')
                 pass
             else:
@@ -113,13 +114,14 @@ while True:
                 raise
 
         try:
-            conn, addr = s.accept()
+            if "conn" not in globals():
+                conn, addr = s.accept()
             logging.info(f"{s.getsockname()} --> {addr}")
         except OSError as e:
-            if(e.errno == errno.EISCONN):
+            if e.errno == errno.EISCONN:
                 # print('Socket is already connected')
                 pass
-            elif(e.errno == 107):
+            elif e.errno == 107:
                 # print('OSError: [Errno 107] Transport endpoint is not connected')
                 # Re-raise the exception
                 raise
