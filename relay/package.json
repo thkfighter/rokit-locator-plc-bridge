@@ -1,0 +1,14 @@
+{
+  "name": "relay",
+  "version": "1.0.0",
+  "description": "This program forwards the pose data emitted by ROKIT Locator from port 9011 to port 9511, and it also allows for reducing the data transmission frequency and discarding excess data. This program is used to take care of Siemens S7 1200 for its insufficient data processing capability of TCP communication.",
+  "main": "relay.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "TAN Hongkui",
+  "license": "MIT",
+  "dependencies": {
+    "binary-parser": "^2.2.1"
+  }
+}
