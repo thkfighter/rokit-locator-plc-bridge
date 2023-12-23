@@ -86,7 +86,7 @@ logging.info(f"Destination host: {dst_host}")
 logging.info(f"Destination port: {dst_port}")
 
 tic = time.perf_counter()
-t_delta = 1.0 / frq
+time_interval = 1.0 / frq
 
 
 while True:
@@ -105,12 +105,10 @@ while True:
                 with conn:
                     logging.info(f"{s.getsockname()} --> {addr}")
                     while True:
-                        data = c.recv(1024)  # length of pose payload is 188
-                        if not data:
-                            continue
                         toc = time.perf_counter()
-                        if (toc - tic) >= t_delta:
-                            conn.sendall(data)
+                        if (toc - tic) >= time_interval:
+                            # length of pose payload is 188
+                            conn.sendall(c.recv(1024))
                             tic = toc
                 # print('.')
     except KeyboardInterrupt:
