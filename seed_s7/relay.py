@@ -13,8 +13,9 @@ import socket
 import time
 import sys
 import logging
-import json
-import errno
+
+# import json
+# import errno
 
 
 frq = 15
@@ -30,7 +31,6 @@ logging.basicConfig(
     level=logging.INFO,
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-
 
 # Arguments
 parser = argparse.ArgumentParser(
@@ -85,63 +85,36 @@ logging.info(f"Source port: {src_port}")
 logging.info(f"Destination host: {dst_host}")
 logging.info(f"Destination port: {dst_port}")
 
-# Socket instances
-c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-# Avoid bind() exception: OSError: [Errno 48] Address already in use
-s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-s.bind((dst_host, dst_port))
-s.listen(1)
-c.settimeout(5)
-# s.settimeout(5)
-conn, addr = s.accept()
-
 tic = time.perf_counter()
 t_delta = 1.0 / frq
 
 
 while True:
     try:
-        try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as c:
+            # c.settimeout(5)
             c.connect((src_host, src_port))
             logging.info(f"{c.getsockname()} <-- {c.getpeername()}")
-        except OSError as e:
-            if e.errno == errno.EISCONN:
-                # print('OSError: [Errno 106] Transport endpoint is already connected')
-                pass
-            else:
-                # Re-raise the exception
-                raise
-
-        try:
-            if "conn" not in globals():
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                # s.settimeout(5)
+                # Avoid bind() exception: OSError: [Errno 48] Address already in use
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind((dst_host, dst_port))
+                s.listen(1)
                 conn, addr = s.accept()
-            logging.info(f"{s.getsockname()} --> {addr}")
-        except OSError as e:
-            if e.errno == errno.EISCONN:
-                # print('Socket is already connected')
-                pass
-            elif e.errno == 107:
-                # print('OSError: [Errno 107] Transport endpoint is not connected')
-                # Re-raise the exception
-                raise
-            else:
-                raise
-
-        while True:
-            data = c.recv(1024)  # length of pose payload is 188
-            if not data:
-                continue
-            toc = time.perf_counter()
-            if (toc - tic) >= t_delta:
-                conn.sendall(data)
-                tic = toc
+                with conn:
+                    logging.info(f"{s.getsockname()} --> {addr}")
+                    while True:
+                        data = c.recv(1024)  # length of pose payload is 188
+                        if not data:
+                            continue
+                        toc = time.perf_counter()
+                        if (toc - tic) >= t_delta:
+                            conn.sendall(data)
+                            tic = toc
                 # print('.')
     except KeyboardInterrupt:
         # press ctrl+c to stop the program
-        c.close()
-        s.close()
-        # logging.info("Caught keyboard interrupt, exiting")
         logging.exception(KeyboardInterrupt)
         sys.exit("Caught keyboard interrupt, exiting")
     except OSError as e:
