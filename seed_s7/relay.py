@@ -25,12 +25,7 @@ src_port = 9011
 dst_host = ""  # If a socket binds to an empty IP address, it means that the socket is listening on all available network interfaces.
 dst_port = 9511
 
-format = "%(asctime)s [%(levelname)s] %(funcName)s(), %(message)s"
-logging.basicConfig(
-    format=format,
-    level=logging.INFO,
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+debug = 0
 
 # Arguments
 parser = argparse.ArgumentParser(
@@ -59,6 +54,12 @@ parser.add_argument(
 parser.add_argument(
     "--dst_port", type=int, default=dst_port, help="port of destination host"
 )
+parser.add_argument(
+    "--debug",
+    type=int,
+    default=debug,
+    help="0: logging.INFO, 1: logging.DEBUG",
+)
 parser.print_help()
 args = parser.parse_args()
 
@@ -78,6 +79,15 @@ if args.dst_port:
     if args.dst_port not in r:
         raise argparse.ArgumentTypeError("Port number has to be between 1 and 65535")
     dst_port = args.dst_port
+if args.debug:
+    debug = args.debug
+
+format = "%(asctime)s [%(levelname)s] %(funcName)s(), %(message)s"
+logging.basicConfig(
+    format=format,
+    level=logging.DEBUG if debug else logging.INFO,
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 logging.info(f"Frequency: {frq}")
 logging.info(f"Source host: {src_host}")
@@ -87,7 +97,6 @@ logging.info(f"Destination port: {dst_port}")
 
 tic = time.perf_counter()
 time_interval = 1.0 / frq
-
 
 while True:
     try:
@@ -106,11 +115,14 @@ while True:
                     logging.info(f"{s.getsockname()} --> {addr}")
                     while True:
                         toc = time.perf_counter()
+                        data = c.recv(188)
                         if (toc - tic) >= time_interval:
+                            logging.debug(f"Set time interval: {time_interval}")
+                            logging.debug(f"Time elapsed: {toc - tic}")
                             # length of pose payload is 188
-                            conn.sendall(c.recv(188))
+                            conn.sendall(data)
                             tic = toc
-                # print('.')
+
     except KeyboardInterrupt:
         # press ctrl+c to stop the program
         logging.exception(KeyboardInterrupt)
