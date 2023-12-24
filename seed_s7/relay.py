@@ -108,7 +108,7 @@ while True:
                         toc = time.perf_counter()
                         if (toc - tic) >= time_interval:
                             # length of pose payload is 188
-                            conn.sendall(c.recv(1024))
+                            conn.sendall(c.recv(188))
                             tic = toc
                 # print('.')
     except KeyboardInterrupt:
