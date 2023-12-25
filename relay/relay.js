@@ -1,5 +1,6 @@
 const net = require("node:net");
 const BinaryParser = require("binary-parser").Parser;
+// const { Buffer } = require('node:buffer');
 
 const src_host = "127.0.0.1";
 const src_port = 9011;
@@ -44,7 +45,8 @@ function connectToServer() {
         .doublele("lidarOdoPoseYaw");
 
     client.on("data", function (data) {
-
+        // buf = Buffer.from(data);
+        // console.log("poseX " + buf.readDoubleLE(44)); // poseX
         console.log(ClientLocalizationPoseStruct.parse(data));
 
         // if (node.datatype != "buffer") {
@@ -75,6 +77,11 @@ function connectToServer() {
         //     }
         // }
     });
+
+    client.on('data', (data) => {
+
+    });
+
     client.on("end", function () {
         console.log("disconnected from " + src_host + ":" + src_port);
         reconnectTimeoutId = setTimeout(connectToServer, 5000);
