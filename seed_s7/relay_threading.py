@@ -40,7 +40,7 @@ def receive_data(src_host, src_port, frq, data_queue):
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as c:
                 c.settimeout(5)
                 c.connect((src_host, src_port))
-                logging.info(f"provider {c.getpeername()} --> {c.getsockname()}")
+                logging.info(f"producer {c.getpeername()} --> {c.getsockname()}")
                 while True:
                     toc = time.perf_counter()
                     data = c.recv(188)
