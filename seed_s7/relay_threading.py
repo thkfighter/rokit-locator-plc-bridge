@@ -3,7 +3,7 @@
 # reference https://realpython.com/python-sockets/
 #
 # File: relay.py
-# Created On: 2023-04-12
+# Created On: 2023-12-24
 # SPDX-FileCopyrightText: Copyright (c) 2023 Shanghai Bosch Rexroth Hydraulics & Automation Ltd.
 # SPDX-License-Identifier: MIT
 #
@@ -11,11 +11,11 @@
 import argparse
 import socket
 import time
-import sys
 import logging
 import threading
 import queue
 
+# import sys
 # import json
 # import errno
 
@@ -29,7 +29,7 @@ dst_port = 9511
 
 debug = 0
 
-data_queue = queue.Queue()
+data_queue = queue.Queue(1)
 
 
 def receive_data(src_host, src_port, frq, data_queue):
@@ -40,15 +40,20 @@ def receive_data(src_host, src_port, frq, data_queue):
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as c:
                 c.settimeout(5)
                 c.connect((src_host, src_port))
-                logging.info(f"{c.getsockname()} <-- {c.getpeername()}")
+                logging.info(f"provider {c.getpeername()} --> {c.getsockname()}")
                 while True:
                     toc = time.perf_counter()
                     data = c.recv(188)
                     if (toc - tic) >= time_interval:
                         logging.debug(f"Set time interval: {time_interval}")
                         logging.debug(f"Time elapsed: {toc - tic}")
-                        data_queue.put(data)
-                        tic = toc
+                        try:
+                            data_queue.put_nowait(data)
+                            tic = toc
+                        except queue.Full:
+                            logging.warning("consumer is not connected; discard data")
+                            data_queue.get()
+                            time.sleep(3)
         except KeyboardInterrupt:
             logging.exception(KeyboardInterrupt)
             return
@@ -70,7 +75,7 @@ def send_data(dst_host, dst_port, data_queue):
                 s.listen(1)
                 conn, addr = s.accept()
                 with conn:
-                    logging.info(f"{s.getsockname()} --> {addr}")
+                    logging.info(f"{s.getsockname()} --> consumer {addr}")
                     while True:
                         data = data_queue.get()
                         conn.sendall(data)
