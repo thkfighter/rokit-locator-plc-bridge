@@ -38,7 +38,7 @@ def receive_data(src_host, src_port, frq, data_queue):
     while True:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as c:
-                c.settimeout(5)
+                # c.settimeout(5)
                 c.connect((src_host, src_port))
                 logging.info(f"producer {c.getpeername()} --> {c.getsockname()}")
                 while True:
@@ -47,13 +47,10 @@ def receive_data(src_host, src_port, frq, data_queue):
                     if (toc - tic) >= time_interval:
                         logging.debug(f"Set time interval: {time_interval}")
                         logging.debug(f"Time elapsed: {toc - tic}")
-                        try:
-                            data_queue.put_nowait(data)
-                            tic = toc
-                        except queue.Full:
-                            logging.warning("consumer is not connected; discard data")
+                        if data_queue.full():
                             data_queue.get()
-                            time.sleep(3)
+                        data_queue.put_nowait(data)
+                        tic = toc
         except KeyboardInterrupt:
             logging.exception(KeyboardInterrupt)
             return
@@ -69,6 +66,7 @@ def send_data(dst_host, dst_port, data_queue):
     while True:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                # s.settimeout(5)
                 # Avoid bind() exception: OSError: [Errno 48] Address already in use
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 s.bind((dst_host, dst_port))
