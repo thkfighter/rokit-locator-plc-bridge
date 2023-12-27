@@ -92,7 +92,10 @@ if __name__ == "__main__":
     #     help="Configuration file with path",
     # )
     parser.add_argument(
-        "--frq_divisor", type=float, default=frq_divisor, help="frequency divisor"
+        "--frq_divisor",
+        type=int,
+        default=frq_divisor,
+        help="frequency divisor; frequency of outgoing bytes = frequency of incoming bytes / frq_divisor",
     )
     parser.add_argument(
         "--src_host", type=str, default=src_host, help="IP address of source host"
@@ -148,7 +151,7 @@ if __name__ == "__main__":
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    logging.info(f"Frequency: {frq_divisor}")
+    logging.info(f"Frequency divisor: {frq_divisor}")
     logging.info(f"Source host: {src_host}")
     logging.info(f"Source port: {src_port}")
     logging.info(f"Destination host: {dst_host}")

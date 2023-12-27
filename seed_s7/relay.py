@@ -14,17 +14,11 @@ import time
 import sys
 import logging
 
-# import json
-# import errno
-
-
-frq = 15
+frq_divisor = 3
 src_host = "127.0.0.1"
 src_port = 9011
-
 dst_host = ""  # If a socket binds to an empty IP address, it means that the socket is listening on all available network interfaces.
 dst_port = 9511
-
 debug = 0
 
 # Arguments
@@ -38,7 +32,12 @@ parser = argparse.ArgumentParser(
 #     type=str,
 #     help="Configuration file with path",
 # )
-parser.add_argument("--frq", type=float, default=frq, help="frequency of package relay")
+parser.add_argument(
+    "--frq_divisor",
+    type=int,
+    default=frq_divisor,
+    help="frequency divisor; frequency of outgoing bytes = frequency of incoming bytes / frq_divisor",
+)
 parser.add_argument(
     "--src_host", type=str, default=src_host, help="IP address of source host"
 )
@@ -63,8 +62,8 @@ parser.add_argument(
 parser.print_help()
 args = parser.parse_args()
 
-if args.frq:
-    frq = args.frq
+if args.frq_divisor:
+    frq_divisor = args.frq_divisor
 if args.src_host:
     src_host = args.src_host
 if args.src_port:
@@ -89,21 +88,19 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-logging.info(f"Frequency: {frq}")
+logging.info(f"Frequency divisor: {frq_divisor}")
 logging.info(f"Source host: {src_host}")
 logging.info(f"Source port: {src_port}")
 logging.info(f"Destination host: {dst_host}")
 logging.info(f"Destination port: {dst_port}")
 
-tic = time.perf_counter()
-time_interval = 1.0 / frq
 
 while True:
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as c:
             # c.settimeout(5)
             c.connect((src_host, src_port))
-            logging.info(f"{c.getsockname()} <-- {c.getpeername()}")
+            logging.info(f"producer {c.getpeername()} --> {c.getsockname()}")
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 # s.settimeout(5)
                 # Avoid bind() exception: OSError: [Errno 48] Address already in use
@@ -112,17 +109,15 @@ while True:
                 s.listen(1)
                 conn, addr = s.accept()
                 with conn:
-                    logging.info(f"{s.getsockname()} --> {addr}")
+                    logging.info(f"{s.getsockname()} --> consumer {addr}")
+                    count = 0
                     while True:
-                        toc = time.perf_counter()
+                        # size of pose payload is 188
                         data = c.recv(188)
-                        if (toc - tic) >= time_interval:
-                            logging.debug(f"Set time interval: {time_interval}")
-                            logging.debug(f"Time elapsed: {toc - tic}")
-                            # length of pose payload is 188
+                        count += 1
+                        if count == frq_divisor:
                             conn.sendall(data)
-                            tic = toc
-
+                            count = 0
     except KeyboardInterrupt:
         # press ctrl+c to stop the program
         logging.exception(KeyboardInterrupt)
