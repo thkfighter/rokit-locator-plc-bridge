@@ -2,19 +2,24 @@ const net = require("node:net");
 const BinaryParser = require("binary-parser").Parser;
 // const { Buffer } = require('node:buffer');
 
-const src_host = "127.0.0.1";
-const src_port = 9011;
-
-const dest_host = "";
-const dest_port = 9511;
-
+let frq_divisor = 3
+let src_host = "127.0.0.1";
+let src_port = 9011;
+let dst_host = "";
+let dst_port = 9511;
+let payload;
 let reconnectTimeoutId;
 
+if (process.argv[2]) {
+    frq_divisor = process.argv[2]
+}
+
 function connectToServer() {
+    var count = 0;
     const client = net.createConnection(src_port, src_host);
 
     client.on('connect', () => {
-        console.log("connected to " + src_host + ":" + src_port);
+        console.log("Connected to " + src_host + ":" + src_port);
         clearTimeout(reconnectTimeoutId);
     });
 
@@ -44,41 +49,15 @@ function connectToServer() {
         .doublele("lidarOdoPoseY")
         .doublele("lidarOdoPoseYaw");
 
-    client.on("data", function (data) {
+    client.on("data", (data) => {
         // buf = Buffer.from(data);
         // console.log("poseX " + buf.readDoubleLE(44)); // poseX
-        console.log(ClientLocalizationPoseStruct.parse(data));
-
-        // if (node.datatype != "buffer") {
-        //     data = data.toString(node.datatype);
-        // }
-        // if (node.stream) {
-        //     var msg;
-        //     if ((node.datatype) === "utf8" && node.newline !== "") {
-        //         buffer = buffer + data;
-        //         var parts = buffer.split(node.newline);
-        //         for (var i = 0; i < parts.length - 1; i += 1) {
-        //             msg = { topic: node.topic, payload: parts[i] };
-        //             if (node.trim == true) { msg.payload += node.newline; }
-        //             msg._session = { type: "tcp", id: id };
-        //             node.send(msg);
-        //         }
-        //         buffer = parts[parts.length - 1];
-        //     } else {
-        //         msg = { topic: node.topic, payload: data };
-        //         msg._session = { type: "tcp", id: id };
-        //         node.send(msg);
-        //     }
-        // } else {
-        //     if ((typeof data) === "string") {
-        //         buffer = buffer + data;
-        //     } else {
-        //         buffer = Buffer.concat([buffer, data], buffer.length + data.length);
-        //     }
-        // }
-    });
-
-    client.on('data', (data) => {
+        // console.log(ClientLocalizationPoseStruct.parse(data));
+        if (++count == frq_divisor) {
+            payload = data;
+            broadcast(payload);
+            count = 0;
+        }
 
     });
 
@@ -94,15 +73,52 @@ function connectToServer() {
         reconnectTimeoutId = setTimeout(connectToServer, 5000);
     });
 }
-
 connectToServer();
 
-const server = net.createServer();
 
-server.listen(dest_port, (socket) => {
-    console.log("Server listening on port" + dest_port);
+// Function to broadcast data to all connected clients
+function broadcast(data) {
+    for (const client of Object.values(clients)) {
+        if (client.writable) {
+            client.write(data);
+        } else {
+            console.log(`Client ${client.id} is not writable.`);
+            removeClient(client);
+        }
+    }
+}
+
+// Map to store connected clients
+const clients = {};
+
+// Create a TCP server
+const server = net.createServer((socket) => {
+    console.log('Client connected');
+
+    // Assign a unique ID to the client
+    socket.id = Date.now();
+    clients[socket.id] = socket;
+
+    // Handle incoming data from the client
+    // socket.on('data', (data) => {
+    //     console.log(`Received data from client ${socket.id}: ${data}`);
+    //     // You can update the payload here based on the received data, if needed
+    //     // For example: updatePayload(data);
+    // });
+
+    // Handle client disconnection
+    socket.on('end', () => {
+        console.log('Client disconnected');
+        removeClient(socket);
+    });
 });
 
-server.on("connection", () => {
-    console.log("new connection");
-}); 
+// Remove a client from the clients map
+function removeClient(client) {
+    delete clients[client.id];
+}
+
+// Start listening on port 9511
+server.listen(dst_port, () => {
+    console.log('Listening on port ' + dst_port);
+});
