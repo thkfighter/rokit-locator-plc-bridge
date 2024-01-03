@@ -9,8 +9,17 @@
 # Define variables
 GITEE_REPO_OWNER="thkfighter"
 GITEE_REPO_NAME="locator_plc_bridge"
-EXECUTABLE_NAME="seed_s7_ubuntu22.04_amd64" # TODO system version
+executable_name="seed_s7" # TODO system version
 EXECUTABLE_VERSION="v1.0.4"
+codename = $(lsb_release -c)
+arch = $(uname -m)
+if [[$codename == *"focal"*]] && $arch == "x86_64"; then
+    suffix = "_ubuntu20.04_amd64";
+elif [[$codename == *"jammy"*]] && $arch == "x86_64";
+    suffix = "_ubuntu22.04_amd64";
+fi
+executable_name = "$executable_name$suffix"
+
 DOWNLOAD_URL="https://gitee.com/${GITEE_REPO_OWNER}/${GITEE_REPO_NAME}/releases/download/${EXECUTABLE_VERSION}/${EXECUTABLE_NAME}"
 
 # https://gitee.com/thkfighter/locator_plc_bridge/releases/download/v1.0.4/seed_s7_ubuntu22.04_amd64
