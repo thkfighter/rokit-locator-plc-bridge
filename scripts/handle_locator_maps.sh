@@ -7,10 +7,18 @@
 #
 
 # sudo bash script.sh
-# sudo -u $USER -E bash script.sh
-# sudo -E bash script.sh
+# Get the username of the original user who ran the sudo command
+original_user="$SUDO_USER"
 
-# TODO check if the script is run with sudo
+if [ -z "$original_user" ]; then
+    # If not run with sudo or no SUDO_USER is set, fallback to current USER
+    original_user="$USER"
+    echo "This script should be run with sudo."
+    echo "  sudo bash $0"
+    exit 1
+fi
+
+echo "Original user: $original_user"
 
 version=1.8 # do not include minor version number
 dir_prefix=""
@@ -18,8 +26,7 @@ dir_recordings="/var/lib/docker/volumes/BoschRexrothLocalizationClientWorkdir/_d
 dir_sketches="/var/lib/docker/volumes/BoschRexrothLocalizationClientWorkdir/_data/${version}/client/slam/maps"
 dir_client_loc_maps="/var/lib/docker/volumes/BoschRexrothLocalizationClientWorkdir/_data/${version}/client/loc/maps"
 dir_server_maps="/var/lib/docker/volumes/BoschRexrothLocalizationServerWorkdir/_data/${version}/server/mus/maps"
-current_user="tao4sgh"
-dir_backup="/home/tao4sgh/rokit/maps" # TODO user
+dir_backup="/home/${original_user}/rokit/maps"
 backup_maps(){
     # backup locator
     mkdir -p $dir_backup
@@ -33,7 +40,7 @@ backup_maps(){
     # server maps and updates 服务器地图和更新
     rsync -av --relative $dir_server_maps $dir_backup
     popd
-    chown $current_user:$current_user $dir_backup -R
+    chown $original_user:$original_user $dir_backup -R
     
 }
 
