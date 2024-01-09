@@ -8,24 +8,38 @@
 
 # sudo bash script.sh
 # Get the username of the original user who ran the sudo command
-original_user="$SUDO_USER"
+original_user=${SUDO_USER}
 
-if [ -z "$original_user" ]; then
+if [ -z ${original_user} ]; then
     # If not run with sudo or no SUDO_USER is set, fallback to current USER
     original_user="$USER"
-    echo "This script should be run with sudo."
+    echo "Warn: This script should be run with sudo."
     echo "  sudo bash $0"
     exit 1
 fi
 
 echo "Original user: $original_user"
 
-version=1.8 # do not include minor version number
+# Enter version of Locator which does not include the minor version number
+read -p "Select version of ROKIT Locator (default 1.8|1.6): " locator_version
+locator_version=${locator_version:-1.8}
+if [[ ${locator_version} =~ ^\s*1\.8(\.\d*)?\s*$ ]] # TODO cannot recognise 1.8.3
+then
+    locator_version=1.8
+elif [[ ${locator_version} =~ ^\s*1\.6(\.\d*)?\s*$ ]]
+then
+    locator_version=1.6
+else
+    echo "Warn: not valid/supported version"
+    exit 1
+fi
+echo "ROKIT Locator ${locator_version}"
+
 dir_prefix=""
-dir_recordings="/var/lib/docker/volumes/BoschRexrothLocalizationClientWorkdir/_data/${version}/client/slam/recordings"
-dir_sketches="/var/lib/docker/volumes/BoschRexrothLocalizationClientWorkdir/_data/${version}/client/slam/maps"
-dir_client_loc_maps="/var/lib/docker/volumes/BoschRexrothLocalizationClientWorkdir/_data/${version}/client/loc/maps"
-dir_server_maps="/var/lib/docker/volumes/BoschRexrothLocalizationServerWorkdir/_data/${version}/server/mus/maps"
+dir_recordings="/var/lib/docker/volumes/BoschRexrothLocalizationClientWorkdir/_data/${locator_version}/client/slam/recordings"
+dir_sketches="/var/lib/docker/volumes/BoschRexrothLocalizationClientWorkdir/_data/${locator_version}/client/slam/maps"
+dir_client_loc_maps="/var/lib/docker/volumes/BoschRexrothLocalizationClientWorkdir/_data/${locator_version}/client/loc/maps"
+dir_server_maps="/var/lib/docker/volumes/BoschRexrothLocalizationServerWorkdir/_data/${locator_version}/server/mus/maps"
 dir_backup="/home/${original_user}/rokit/maps"
 backup_maps(){
     # backup locator
@@ -86,9 +100,10 @@ start_menu(){
     # clear
     echo
     printf "${COLOR}====================================${NC}\n"
-    printf "${COLOR}%-10s%-26s${NC}\n" "Script" $0
-    printf "${COLOR}%-10s%-26s${NC}\n" "OS" "$(lsb_release -ds)"
-    printf "${COLOR}%-10s%-26s${NC}\n" "Author" "TAN Hongkui"
+    printf "${COLOR}%-36s${NC}\n" $0
+    printf "${COLOR}%-36s${NC}\n" "ROKIT Locator ${locator_version}"
+    # printf "${COLOR}%-10s%-26s${NC}\n" "Script" $0
+    # printf "${COLOR}%-10s%-26s${NC}\n" "Author" "TAN Hongkui"
     printf "${GREEN_B}====================================${NC}\n"
     echo
     printf "${YELLOW_F} 1. backup maps${NC}\n"
@@ -101,7 +116,6 @@ start_menu(){
     printf " 0. ctrl+c to exit\n"
     echo
     
-    # read -p "ROKIT Locator version (1.6 or 1.8):" locator_version
     read -p "enter number:" num
     case "$num" in
         0)
