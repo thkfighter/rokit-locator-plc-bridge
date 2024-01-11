@@ -10,8 +10,8 @@
     "plc_slot": 1,
     "seed_count": 8,
     "db_number": 10000,
-    "row_size": 28,
+    "row_size": 26,
     "pose_size": 24,
-    "layout": "\n0.0     enforceSeed     BOOL\n0.1     uncertainSeed   BOOL\n2       x               LREAL\n10      y               LREAL\n18      a               LREAL\n26.0    recordSeed      BOOL\n26.1    setSeed         BOOL\n",
+    "layout": "\n0  x  LREAL\n8  y  LREAL\n16  yaw  LREAL\n24.0  enforceSeed  BOOL\n24.1  uncertainSeed  BOOL\n24.2  recordSeed  BOOL\n24.3  setSeed  BOOL\n",
     "debug": 0
 }

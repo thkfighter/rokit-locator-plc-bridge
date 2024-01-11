@@ -34,16 +34,16 @@ config = {
     "plc_slot": 1,
     "seed_count": 8,
     "db_number": 10000,
-    "row_size": 28,
+    "row_size": 26,
     "pose_size": 24,
     "layout": """
-0.0     enforceSeed     BOOL
-0.1     uncertainSeed   BOOL
-2       x               LREAL
-10      y               LREAL
-18      a               LREAL
-26.0    recordSeed      BOOL
-26.1    setSeed         BOOL
+0       x               LREAL
+8       y               LREAL
+16      yaw             LREAL
+24.0    enforceSeed     BOOL
+24.1    uncertainSeed   BOOL
+24.2    recordSeed      BOOL
+24.3    setSeed         BOOL
 """,
     "debug": 0,
 }
