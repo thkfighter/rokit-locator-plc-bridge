@@ -23,7 +23,6 @@ import requests
 # https://docs.python.org/3/library/struct.html
 # print(datetime.now())
 
-id = 0
 
 format = "%(asctime)s [%(levelname)s] %(funcName)s(), %(message)s"
 logging.basicConfig(
@@ -32,7 +31,15 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-# JSON-RPC
+# ====== JSON-RPC ======
+
+id = 0
+payload = {
+    "id": id,
+    "jsonrpc": "2.0",
+    "method": "supportRecoveryList",
+    "params": {"query": {}},
+}
 
 
 def sessionLogin(url, user_name, password) -> str:
@@ -83,7 +90,71 @@ def sessionLogout(url, sessionId: str = None) -> bool:
         return False
 
 
-# Binary Interfaces
+def supportRecoveryList(url, sessionId):
+    global id
+
+    payload = {
+        "id": id,
+        "jsonrpc": "2.0",
+        "method": "supportRecoveryList",
+        "params": {"query": {"sessionId": sessionId}},
+    }
+    id = id + 1
+
+    response = requests.post(url=url, json=payload)
+    logging.debug(response.json())
+    return response.json()
+    # if response.json()["result"]["response"]["responseCode"] == 0:
+    #     return True
+    # else:
+    #     return False
+
+
+def supportRecoveryCreate(url, payload, sessionId):
+    global id
+    payload["id"] = id
+    payload["method"] = "supportRecoveryCreate"
+    payload["params"]["query"] = {"sessionId": sessionId}
+    id = id + 1
+    response = requests.post(url=url, json=payload)
+    logging.debug(response.json())
+    return response.json()
+
+
+def supportRecoveryDelete(url, payload, sessionId, recoveryName):
+    global id
+    payload["id"] = id
+    payload["method"] = "supportRecoveryDelete"
+    payload["params"]["query"] = {"sessionId": sessionId, "recoveryName": recoveryName}
+    id = id + 1
+    response = requests.post(url=url, json=payload)
+    logging.debug(response.json())
+    return response.json()
+
+
+def supportRecoveryFactoryReset(url, payload, sessionId):
+    global id
+    payload["id"] = id
+    payload["method"] = "supportRecoveryFactoryReset"
+    payload["params"]["query"] = {"sessionId": sessionId}
+    id = id + 1
+    response = requests.post(url=url, json=payload)
+    logging.debug(response.json())
+    return response.json()
+
+
+def supportRecoveryFrom(url, payload, sessionId, recoveryName):
+    global id
+    payload["id"] = id
+    payload["method"] = "supportRecoveryFrom"
+    payload["params"]["query"] = {"sessionId": sessionId, "recoveryName": recoveryName}
+    id = id + 1
+    response = requests.post(url=url, json=payload)
+    logging.debug(response.json())
+    return response.json()
+
+
+# ====== Binary Interfaces ======
 
 
 def connect_socket(host, port):

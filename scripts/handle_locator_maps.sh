@@ -71,17 +71,6 @@ list_dir(){
     ls -lh $1
 }
 
-# list_sketches(){
-#     :
-# }
-
-# list_client_loc_maps(){
-#     :
-# }
-
-# list_server_maps(){
-#     :
-# }
 
 if ! which tree >& /dev/null
 then
