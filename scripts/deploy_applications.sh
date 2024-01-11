@@ -74,7 +74,7 @@ install_target()
     if [ -e ${EXEC_DIR}/${target} ]
     then
         echo "${EXEC_DIR}/${target} already exists."
-    elif [-e ${EXEC_DIR}/${target_download} ]
+    elif [ -e ${EXEC_DIR}/${target_download} ]
     then
         echo "${EXEC_DIR}/${target_download} already exists; rename it."
         cp ${EXEC_DIR}/${target_download} ${EXEC_DIR}/${target}

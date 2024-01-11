@@ -8,6 +8,7 @@
 
 import os
 import re
+import sys
 import subprocess
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion.filesystem import ExecutableCompleter, PathCompleter
@@ -23,7 +24,7 @@ def get_original_user():
     if not original_user:
         print("Warn: This script should be run with sudo.")
         print(f"  sudo python {os.path.basename(__file__)}")
-        exit(1)
+        sys.exit(1)
 
     return original_user
 
@@ -37,7 +38,7 @@ def validate_locator_version(locator_version):
         )
     else:
         print("Warn: Not a valid/supported version.")
-        exit(1)
+        sys.exit(1)
 
 
 def backup_maps(original_user):
