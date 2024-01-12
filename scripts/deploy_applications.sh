@@ -17,11 +17,7 @@ if [ -z "$original_user" ]; then
     echo "  sudo bash $0"
     exit 1
 fi
-
 echo "Original user: $original_user"
-
-apt update && apt upgrade -y # 更新软件源和已安装的软件
-apt install libfuse-dev
 
 # Define variables
 GITEE_REPO_OWNER="thkfighter"
@@ -58,11 +54,18 @@ url_prefix="https://gitee.com/${GITEE_REPO_OWNER}/${GITEE_REPO_NAME}/releases/do
 # Create a directory to store the executable (if not exists)
 EXEC_DIR="/home/${original_user}/rokit/service"
 mkdir -p "${EXEC_DIR}"
+chown "${original_user}:${original_user}" "${EXEC_DIR}" -R
 
 install_target()
 {
-    # parameters: target with_name_suffix with_config
+    # arguments: target with_name_suffix with_config
     target=$1
+    if [[ ${target} =~ "716mini" ]]
+    then
+        url_prefix="https://gitee.com/thkfighter/simple_vanjee_716mini/releases/download/v1.2/"
+        # https://gitee.com/thkfighter/simple_vanjee_716mini/releases/download/v1.2/simple_vanjee_716mini_ubuntu22.04_amd64
+    fi
+    
     if [ $2 -eq 1 ]
     then
         target_download="${target}_${os}_${arch}"
@@ -82,6 +85,7 @@ install_target()
         echo "downloading ${target} to ${EXEC_DIR}..."
         wget -nv -O ${EXEC_DIR}/${target} ${url_target}
     fi
+    chown "${original_user}:${original_user}" "${EXEC_DIR}/${target}"
     chmod +x "${EXEC_DIR}/${target}"
     
     if [ $3 -eq 1 ]
@@ -94,8 +98,10 @@ install_target()
             echo "downloading ${target_config} to ${EXEC_DIR}..."
             wget -nv -P ${EXEC_DIR} ${url_prefix}${target_config}
         fi
+        chown "${original_user}:${original_user}" "${EXEC_DIR}/${target_config}"
+        chmod 664 "${EXEC_DIR}/${target_config}"
         # prompt to edit the configuration file
-        # TODO disable this
+        # TODO disable this?
         read -p "Edit the configuration file now? (yes|No): " choice
         choice=${choice:-No}
         if [[ ${choice} =~ [yY] ]]
@@ -157,8 +163,9 @@ WantedBy=multi-user.target
 EOF
     fi
     
-    echo "======${SERVICE_FILE}"
-    cat "${SERVICE_FILE}"
+    echo ${SERVICE_FILE}
+    echo "======"
+    cat ${SERVICE_FILE}
     echo "======"
     
     # Reload systemd daemon to recognize new service file
@@ -174,6 +181,87 @@ EOF
     
 }
 
+install_driver()
+{
+    read -p "雷达序号(1|2):" lidar_num
+    echo
+    printf "${COLOR}%-36s${NC}\n" "选择雷达驱动"
+    echo
+    echo -e "${YELLOW_F} 1. simple_vanjee_716mini${NC}"
+    echo -e "${YELLOW_F} 2. simple_ole${NC}"
+    echo -e "${YELLOW_F} 3. simple_hins_le${NC}"
+    echo -e "${YELLOW_F} 4. simple_lanhai${NC}"
+    echo -e "${YELLOW_F} 5. simple_sdkeli_klm${NC}"
+    echo
+    read -p "请输入数字:" num
+    case "$num" in
+        1)
+            target="simple_vanjee_716mini"
+            url_prefix="https://gitee.com/thkfighter/simple_vanjee_716mini/releases/download/v1.2/"
+            # https://gitee.com/thkfighter/simple_vanjee_716mini/releases/download/v1.2/simple_vanjee_716mini_ubuntu22.04_amd64
+        ;;
+        *)
+            echo "not valid number"
+            sleep 2s
+        ;;
+    esac
+       
+    target_download="${target}_${os}_${arch}"
+    
+    # Download the executable
+    url_target="${url_prefix}${target_download}"
+    if [ -e ${EXEC_DIR}/${target} ]
+    then
+        echo "${EXEC_DIR}/${target} already exists."
+    elif [ -e ${EXEC_DIR}/${target_download} ]
+    then
+        echo "${EXEC_DIR}/${target_download} already exists; rename it."
+        cp ${EXEC_DIR}/${target_download} ${EXEC_DIR}/${target}
+    else
+        echo "downloading ${target} to ${EXEC_DIR}..."
+        wget -nv -O ${EXEC_DIR}/${target} ${url_target}
+    fi
+    chown "${original_user}:${original_user}" "${EXEC_DIR}/${target}"
+    chmod +x "${EXEC_DIR}/${target}"
+    
+    # service_name="${target}_${lidar_num}.service"
+    service_file="/etc/systemd/system/${target}_${lidar_num}.service"
+    
+    # Create the systemd service file
+    read -p "雷达IP: " lidar_ip
+    read -p "雷达端口: " lidar_port
+    read -p "驱动转发雷达数据端口: " dst_port
+    cat > ${service_file} <<EOF
+[Unit]
+Description=Driver of LiDAR Vanjee 716mini for Rexroth ROKIT Locator
+After=network.target
+
+[Service]
+ExecStartPre=/bin/sleep 3
+ExecStart=/home/${original_user}/rokit/service/${target} -f ${lidar_ip} -F ${lidar_port} -T ${dst_port}
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    
+    echo ${service_file}
+    echo "======"
+    cat ${service_file}
+    echo "======"
+    
+    # Reload systemd daemon to recognize new service file
+    systemctl daemon-reload
+    
+    # Enable the service to start at boot
+    systemctl enable "${target}_${lidar_num}.service"
+    
+    # Start the service
+    systemctl start "${target}_${lidar_num}.service"
+    
+    echo "Successfully set up ${target} as a systemd service."
+    
+}
 
 # ANSI escape codes for colors
 RED='\033[0;31m'
@@ -184,7 +272,6 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 start_menu(){
-    # clear
     echo
     printf "${COLOR}====================================${NC}\n"
     printf "${COLOR}%-10s%-26s${NC}\n" "Script" $0
@@ -194,12 +281,9 @@ start_menu(){
     echo
     echo -e "${YELLOW_F} 1. 安装seed_s7${NC}"
     echo -e "${YELLOW_F} 2. 安装relay.py${NC}"
-    echo -e "${YELLOW_F} 3. 安装simple_vanjee_716mini${NC}"
-    echo -e "${YELLOW_F} 4. 安装seed_modbus${NC}"
-    # echo -e "${YELLOW_F} 11. stop and disable service seed_s7${NC}"
-    # echo -e "${YELLOW_F} 12. stop and disable service relay.py${NC}"
-    # echo -e "${YELLOW_F} 13. stop and disable service simple_vanjee_716mini${NC}"
-    # echo -e "${YELLOW_F} 14. stop and disable service seed_modbus${NC}"
+    echo
+    echo -e "${YELLOW_F} 3. 安装seed_modbus${NC}"
+    echo -e "${YELLOW_F} 4. 安装雷达配套驱动${NC}"
     echo -e " 0. ctrl+c退出脚本"
     echo
     read -p "请输入数字:" num
@@ -211,10 +295,14 @@ start_menu(){
             install_target relay.py 0 0
         ;;
         3)
-            install_target simple_vanjee_716mini.AppImage 1 0
+            install_target seed_modbus 1 1
         ;;
         4)
-            install_target seed_modbus 1 1
+            # TODO check if FUSE is installed
+            apt update # 更新软件源
+            # apt upgrade -y # 更新已安装的软件
+            apt install libfuse-dev -y # AppImages require FUSE to run.
+            install_driver
         ;;
         0)
             exit 1
