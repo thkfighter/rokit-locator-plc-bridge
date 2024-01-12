@@ -40,10 +40,13 @@ dir_recordings="/var/lib/docker/volumes/BoschRexrothLocalizationClientWorkdir/_d
 dir_sketches="/var/lib/docker/volumes/BoschRexrothLocalizationClientWorkdir/_data/${locator_version}/client/slam/maps"
 dir_client_loc_maps="/var/lib/docker/volumes/BoschRexrothLocalizationClientWorkdir/_data/${locator_version}/client/loc/maps"
 dir_server_maps="/var/lib/docker/volumes/BoschRexrothLocalizationServerWorkdir/_data/${locator_version}/server/mus/maps"
-dir_backup="/home/${original_user}/rokit/maps"
+dir_client_recovery="/var/lib/docker/volumes/BoschRexrothLocalizationClientRecoveryDir/_data"
+dir_server_recovery="/var/lib/docker/volumes/BoschRexrothLocalizationServerRecoveryDir/_data"
+dir_backup="/home/${original_user}/rokit/backup"
+mkdir -p $dir_backup
+chown ${original_user}:${original_user} $dir_backup
 backup_maps(){
     # backup locator
-    mkdir -p $dir_backup
     pushd $dir_backup
     # recordings 激光记录
     rsync -av --relative ${dir_recordings} $dir_backup
@@ -71,6 +74,36 @@ list_dir(){
     ls -lh $1
 }
 
+export_recovery(){
+    if [[ $1 == *server* ]]
+    then
+        cp ${dir_server_recovery}/$1 ${dir_backup}
+    elif [[ $1 == *client* ]]
+    then
+        cp ${dir_client_recovery}/$1 ${dir_backup}
+    else
+        echo "Warn: wrong file name"
+        # TODO not exist
+    fi
+    chown ${original_user}:${original_user} $dir_backup/$1
+}
+
+import_recovery(){
+    if [[ $1 == *server* ]]
+    then
+        cp ${dir_backup}/$1 ${dir_server_recovery}
+        chown 9421:9421 ${dir_server_recovery}/$1
+        chmod 644 ${dir_server_recovery}/$1
+    elif [[ $1 == *client* ]]
+    then
+        cp ${dir_backup}/$1 ${dir_client_recovery}
+        chown 9421:9421 ${dir_client_recovery}/$1
+        chmod 644 ${dir_client_recovery}/$1
+    else
+        echo "Warn: wrong file name"
+        # TODO not exist
+    fi
+}
 
 if ! which tree >& /dev/null
 then
@@ -95,26 +128,25 @@ start_menu(){
     # printf "${COLOR}%-10s%-26s${NC}\n" "Author" "TAN Hongkui"
     printf "${GREEN_B}====================================${NC}\n"
     echo
-    printf "${YELLOW_F} 1. backup maps${NC}\n"
-    printf "${YELLOW_F} 2. restore maps${NC}\n"
     printf "${YELLOW_F} 3. list recordings${NC}\n"
     printf "${YELLOW_F} 4. list sketches${NC}\n"
     printf "${YELLOW_F} 5. list client localization maps${NC}\n"
     printf "${YELLOW_F} 6. list server maps${NC}\n"
-    printf "${YELLOW_F} 7. list maps backup${NC}\n"
+    printf "${YELLOW_F} 1. export all recordings, sketches and maps${NC}\n"
+    printf "${YELLOW_F} 2. import ...${NC}\n"
+    printf "${YELLOW_F} 7. tree dir backup${NC}\n"
+    echo
+    printf "${YELLOW_F} 21. list client recovery points${NC}\n"
+    printf "${YELLOW_F} 22. list server recovery points${NC}\n"
+    printf "${YELLOW_F} 23. export a recovery point${NC}\n"
+    printf "${YELLOW_F} 24. import a recovery point${NC}\n"
     printf " 0. ctrl+c to exit\n"
     echo
     
-    read -p "enter number:" num
+    read -p "enter number: " num
     case "$num" in
         0)
             exit 1
-        ;;
-        1)
-            backup_maps
-        ;;
-        2)
-            restore_maps
         ;;
         3)
             list_dir $dir_recordings
@@ -128,8 +160,29 @@ start_menu(){
         6)
             list_dir $dir_server_maps
         ;;
+        1)
+            backup_maps
+        ;;
+        2)
+            restore_maps
+        ;;
         7)
             tree -h $dir_backup
+        ;;
+        21)
+            list_dir $dir_client_recovery
+        ;;
+        22)
+            list_dir $dir_server_recovery
+        ;;
+        23)
+            read -p "Enter file name: " file_name
+            export_recovery ${file_name}
+        ;;
+        24)
+            list_dir ${dir_backup}
+            read -p "Enter file name: " file_name
+            import_recovery ${file_name}
         ;;
         *)
             # clear
