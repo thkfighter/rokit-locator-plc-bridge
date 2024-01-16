@@ -2,22 +2,78 @@ const net = require("node:net");
 const BinaryParser = require("binary-parser").Parser;
 // const { Buffer } = require('node:buffer');
 const readline = require('readline');
+const EventEmitter = require('node:events');
 
-let frq_divisor = 3
-//let src_host = "192.168.8.7";
+const myEmitter = new EventEmitter();
+
 let src_host = "172.17.0.1";
 let src_port = 9090;
-let dst_host = "";
-let dst_port = 9511;
-let payload;
 let reconnectTimeoutId;
 
 if (process.argv[2]) {
-    frq_divisor = process.argv[2]
+    src_host = process.argv[2]
 }
 
+if (process.argv[3]) {
+    src_port = process.argv[3]
+}
+
+const ClientLocalizationPoseDatagram = new BinaryParser()
+    .endianess('little')
+    .doublele("age")
+    .doublele("timestamp")
+    .uint64("uniqueId")
+    .int32("state")
+    .uint64("errorFlags")
+    .uint64("infoFlags")
+    .doublele("poseX")
+    .doublele("poseY")
+    .doublele("poseYaw")
+    .doublele("covariance_1_1")
+    .doublele("covariance_1_2")
+    .doublele("covariance_1_3")
+    .doublele("covariance_2_2")
+    .doublele("covariance_2_3")
+    .doublele("covariance_3_3")
+    .doublele("poseZ")
+    .doublele("quaternion_w")
+    .doublele("quaternion_x")
+    .doublele("quaternion_y")
+    .doublele("quaternion_z")
+    .uint64("epoch")
+    .doublele("lidarOdoPoseX")
+    .doublele("lidarOdoPoseY")
+    .doublele("lidarOdoPoseYaw");
+
+const ClientSensorLaserDatagram = new BinaryParser()
+    .endianess('little')
+    .uint16('scanNum')
+    .doublele('time_start')
+    .uint64('uniqueId')
+    .doublele('duration_beam')
+    .doublele('duration_scan')
+    .doublele('duration_rotate')
+    .uint32('numBeams')
+    .floatle('angleStart')
+    .floatle('angleEnd')
+    .floatle('angleInc')
+    .floatle('minRange')
+    .floatle('maxRange')
+    .uint32('rangeArraySize')
+    .array('ranges', {
+        length: 'rangeArraySize',
+        type: 'floatle'
+    })
+    .uint8('hasIntensities')
+    .floatle('minIntensity')
+    .floatle('maxIntensity')
+    .uint32('intensityArraySize')
+    .array('intensities', {
+        length: 'intensityArraySize',
+        type: 'floatle'
+    });
+
 function connectToServer() {
-    var count = 0;
     const client = net.createConnection(src_port, src_host);
 
     client.on('connect', () => {
@@ -25,96 +81,8 @@ function connectToServer() {
         clearTimeout(reconnectTimeoutId);
     });
 
-    const ClientLocalizationPoseDatagram = new BinaryParser()
-        .doublele("age")
-        .doublele("timestamp")
-        .uint64le("uniqueId")
-        .int32le("state")
-        .uint64le("errorFlags")
-        .uint64le("infoFlags")
-        .doublele("poseX")
-        .doublele("poseY")
-        .doublele("poseYaw")
-        .doublele("covariance_1_1")
-        .doublele("covariance_1_2")
-        .doublele("covariance_1_3")
-        .doublele("covariance_2_2")
-        .doublele("covariance_2_3")
-        .doublele("covariance_3_3")
-        .doublele("poseZ")
-        .doublele("quaternion_w")
-        .doublele("quaternion_x")
-        .doublele("quaternion_y")
-        .doublele("quaternion_z")
-        .uint64le("epoch")
-        .doublele("lidarOdoPoseX")
-        .doublele("lidarOdoPoseY")
-        .doublele("lidarOdoPoseYaw");
-
-    // const ClientSensorLaserDatagram = new BinaryParser()
-    //     .uint16('scanNum')
-    //     .doublele('time_start', { assert: (val) => val >= 0 && val <= 1e12 })
-    //     .uint64('uniqueId')
-    //     .doublele('duration_beam', { assert: (val) => val >= 0 && val <= 1e12 })
-    //     .doublele('duration_scan', { assert: (val) => val >= 0 && val <= 1e12 })
-    //     .doublele('duration_rotate', { assert: (val) => val >= 0 && val <= 1e12 })
-    //     .uint32('numBeams', { assert: (val) => val >= 0 && val <= 100000 })
-    //     .floatle('angleStart', { assert: (val) => val >= -2 * Math.PI && val <= 2 * Math.PI })
-    //     .floatle('angleEnd', { assert: (val) => val >= -2 * Math.PI && val <= 2 * Math.PI })
-    //     .floatle('angleInc', { assert: (val) => val >= -2 * Math.PI && val <= 2 * Math.PI })
-    //     .floatle('minRange', { assert: (val) => val >= 0 && val <= 1e4 })
-    //     .floatle('maxRange', { assert: (val) => val >= 0 && val <= 1e4 })
-    //     .array('ranges', {
-    //         length: 'uint32',
-    //         type: 'floatle',
-    //         assert: (val) => val >= -1e4 && val <= 1e4
-    //     })
-    //     .uint8('hasIntensities')
-    //     .floatle('minIntensity')
-    //     .floatle('maxIntensity')
-    //     .array('intensities', {
-    //         length: 'uint32',
-    //         type: 'floatle'
-    //     });
-
-    const ClientSensorLaserDatagram = new BinaryParser()
-        .uint16('scanNum')
-        .doublele('time_start')
-        .uint64('uniqueId')
-        .doublele('duration_beam')
-        .doublele('duration_scan')
-        .doublele('duration_rotate')
-        .uint32('numBeams')
-        .floatle('angleStart')
-        .floatle('angleEnd')
-        .floatle('angleInc')
-        .floatle('minRange')
-        .floatle('maxRange')
-        .array('ranges', {
-            length: 'uint32',
-            type: 'floatle',
-            assert: (val) => val >= -1e4 && val <= 1e4
-        })
-        .uint8('hasIntensities')
-        .floatle('minIntensity')
-        .floatle('maxIntensity')
-        .array('intensities', {
-            length: 'uint32',
-            type: 'floatle'
-        });
-
     client.on("data", (data) => {
-        // buf = Buffer.from(data);
-        // console.log("poseX " + buf.readDoubleLE(44)); // poseX
-        // console.log(ClientLocalizationPoseDatagram.parse(data));
-        console.log(ClientSensorLaserDatagram.parse(data));
-
-        // if (++count == frq_divisor) {
-        //     payload = data;
-        //     broadcast(payload);
-        //     count = 0;
-        // }
-
+        myEmitter.emit("payload", data);
     });
 
     client.on("end", function () {
@@ -131,50 +99,39 @@ function connectToServer() {
 }
 connectToServer();
 
-
-// Function to broadcast data to all connected clients
-function broadcast(data) {
-    for (const client of Object.values(clients)) {
-        if (client.writable) {
-            client.write(data);
-        } else {
-            console.log(`Client ${client.id} is not writable.`);
-            removeClient(client);
-        }
-    }
-}
-
-// Map to store connected clients
-const clients = {};
-
-// Create a TCP server
-const server = net.createServer((socket) => {
-    console.log('Client connected');
-
-    // Assign a unique ID to the client
-    socket.id = Date.now();
-    clients[socket.id] = socket;
-
-    // Handle incoming data from the client
-    // socket.on('data', (data) => {
-    //     console.log(`Received data from client ${socket.id}: ${data}`);
-    //     // You can update the payload here based on the received data, if needed
-    //     // For example: updatePayload(data);
-    // });
-
-    // Handle client disconnection
-    socket.on('end', () => {
-        console.log('Client disconnected');
-        removeClient(socket);
-    });
+// Create readline interface
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
 });
 
-// Remove a client from the clients map
-function removeClient(client) {
-    delete clients[client.id];
-}
+// Display menu
+console.log('\nChoose a function:');
+console.log('1. ClientLocalizationPoseDatagram');
+console.log('2. ClientSensorLaserDatagram');
 
-// Start listening on port 9511
-server.listen(dst_port, () => {
-    console.log('Listening on port ' + dst_port);
+rl.question('\nEnter your choice: ', (choice) => {
+
+    // Parse and validate the choice
+    choice = parseInt(choice);
+
+    switch (choice) {
+        case 1:
+            myEmitter.on("payload", (data) => {
+                console.log("ClientLocalizationPoseDatagram");
+                console.log(ClientLocalizationPoseDatagram.parse(data));
+            });
+            break;
+        case 2:
+            myEmitter.on("payload", (data) => {
+                console.log("ClientSensorLaserDatagram");
+                console.log(ClientSensorLaserDatagram.parse(data));
+            });
+            break;
+        default:
+            console.log('Invalid choice. Please select a valid option.');
+            break;
+    }
+
+    rl.close();
 });
