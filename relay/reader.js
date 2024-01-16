@@ -1,10 +1,12 @@
 const net = require("node:net");
 const BinaryParser = require("binary-parser").Parser;
 // const { Buffer } = require('node:buffer');
+const readline = require('readline');
 
 let frq_divisor = 3
-let src_host = "127.0.0.1";
-let src_port = 9011;
+//let src_host = "192.168.8.7";
+let src_host = "172.17.0.1";
+let src_port = 9090;
 let dst_host = "";
 let dst_port = 9511;
 let payload;
@@ -49,15 +51,69 @@ function connectToServer() {
         .doublele("lidarOdoPoseY")
         .doublele("lidarOdoPoseYaw");
 
+    // const ClientSensorLaserDatagram = new BinaryParser()
+    //     .uint16('scanNum')
+    //     .doublele('time_start', { assert: (val) => val >= 0 && val <= 1e12 })
+    //     .uint64('uniqueId')
+    //     .doublele('duration_beam', { assert: (val) => val >= 0 && val <= 1e12 })
+    //     .doublele('duration_scan', { assert: (val) => val >= 0 && val <= 1e12 })
+    //     .doublele('duration_rotate', { assert: (val) => val >= 0 && val <= 1e12 })
+    //     .uint32('numBeams', { assert: (val) => val >= 0 && val <= 100000 })
+    //     .floatle('angleStart', { assert: (val) => val >= -2 * Math.PI && val <= 2 * Math.PI })
+    //     .floatle('angleEnd', { assert: (val) => val >= -2 * Math.PI && val <= 2 * Math.PI })
+    //     .floatle('angleInc', { assert: (val) => val >= -2 * Math.PI && val <= 2 * Math.PI })
+    //     .floatle('minRange', { assert: (val) => val >= 0 && val <= 1e4 })
+    //     .floatle('maxRange', { assert: (val) => val >= 0 && val <= 1e4 })
+    //     .array('ranges', {
+    //         length: 'uint32',
+    //         type: 'floatle',
+    //         assert: (val) => val >= -1e4 && val <= 1e4
+    //     })
+    //     .uint8('hasIntensities')
+    //     .floatle('minIntensity')
+    //     .floatle('maxIntensity')
+    //     .array('intensities', {
+    //         length: 'uint32',
+    //         type: 'floatle'
+    //     });
+
+    const ClientSensorLaserDatagram = new BinaryParser()
+        .uint16('scanNum')
+        .doublele('time_start')
+        .uint64('uniqueId')
+        .doublele('duration_beam')
+        .doublele('duration_scan')
+        .doublele('duration_rotate')
+        .uint32('numBeams')
+        .floatle('angleStart')
+        .floatle('angleEnd')
+        .floatle('angleInc')
+        .floatle('minRange')
+        .floatle('maxRange')
+        .array('ranges', {
+            length: 'uint32',
+            type: 'floatle',
+            assert: (val) => val >= -1e4 && val <= 1e4
+        })
+        .uint8('hasIntensities')
+        .floatle('minIntensity')
+        .floatle('maxIntensity')
+        .array('intensities', {
+            length: 'uint32',
+            type: 'floatle'
+        });
+
     client.on("data", (data) => {
         // buf = Buffer.from(data);
         // console.log("poseX " + buf.readDoubleLE(44)); // poseX
         // console.log(ClientLocalizationPoseDatagram.parse(data));
-        if (++count == frq_divisor) {
-            payload = data;
-            broadcast(payload);
-            count = 0;
-        }
+        console.log(ClientSensorLaserDatagram.parse(data));
+
+        // if (++count == frq_divisor) {
+        //     payload = data;
+        //     broadcast(payload);
+        //     count = 0;
+        // }
 
     });
 
