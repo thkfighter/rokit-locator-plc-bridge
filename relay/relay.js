@@ -23,7 +23,7 @@ function connectToServer() {
         clearTimeout(reconnectTimeoutId);
     });
 
-    const ClientLocalizationPoseStruct = new BinaryParser()
+    const ClientLocalizationPoseDatagram = new BinaryParser()
         .doublele("age")
         .doublele("timestamp")
         .uint64le("uniqueId")
@@ -52,7 +52,7 @@ function connectToServer() {
     client.on("data", (data) => {
         // buf = Buffer.from(data);
         // console.log("poseX " + buf.readDoubleLE(44)); // poseX
-        // console.log(ClientLocalizationPoseStruct.parse(data));
+        // console.log(ClientLocalizationPoseDatagram.parse(data));
         if (++count == frq_divisor) {
             payload = data;
             broadcast(payload);
