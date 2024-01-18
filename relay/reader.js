@@ -18,35 +18,24 @@ if (process.argv[3]) {
     src_port = process.argv[3]
 }
 
-// This does not work. Use console.log(data) to see the bytes order.
-// const ClientControlModeDatagram = new BinaryParser()
-//     .endianess('little')
-//     .bit3("LASEROUTPUT")
-//     .bit3("ALIGN")
-//     .bit3("REC")
-//     .bit3("LOC")
-//     .bit3("MAP")
-//     .bit3("VISUALRECORDING")
-//     .bit3("EXPANDMAP")
-//     .bit11("Unused");
-
 const ClientControlModeDatagram = new BinaryParser()
-    .uint32le("controlMode");
-let ControlModeDict = {
-    "LASEROUTPUT": 8,
-    "ALIGN": 8,
-    "REC": 8,
-    "LOC": 8,
-    "MAP": 8,
-    "VISUALRECORDING": 8,
-    "EXPANDMAP": 8
-};
+    .endianess('little')
+    .bit3("LASEROUTPUT")
+    .bit3("ALIGN")
+    .bit3("REC")
+    .bit3("LOC")
+    .bit3("MAP")
+    .bit3("VISUALRECORDING")
+    .bit3("EXPANDMAP")
+    .bit11("Unused");
+
 const ClientState = {
     0: 'INIT',
     1: 'READY',
     2: 'RUN',
     4: 'NOT_AVAILABLE',
 };
+
 const ClientLocalizationPoseDatagram = new BinaryParser()
     .endianess('little')
     .doublele("age")
@@ -158,25 +147,25 @@ rl.question('\nEnter your choice: ', (choice) => {
             });
             break;
         case 3:
-            var oct;
+            var result;
             myEmitter.on("payload", (data) => {
                 console.log("ClientControlModeDatagram");
-                oct = ClientControlModeDatagram.parse(data)["controlMode"].toString(8);
-                // ControlModeDict.LASEROUTPUT = oct[oct.length - 1];
-                // ControlModeDict.ALIGN = oct[oct.length - 2];
-                // ControlModeDict.REC = oct[oct.length - 3];
-                // ControlModeDict.LOC = oct[oct.length - 4];
-                // ControlModeDict.MAP = oct[oct.length - 5];
-                // ControlModeDict.VISUALRECORDING = oct[oct.length - 6];
-                // ControlModeDict.EXPANDMAP = oct[oct.length - 7];
-                ControlModeDict.LASEROUTPUT = ClientState[oct[oct.length - 1]];
-                ControlModeDict.ALIGN = ClientState[oct[oct.length - 2]];
-                ControlModeDict.REC = ClientState[oct[oct.length - 3]];
-                ControlModeDict.LOC = ClientState[oct[oct.length - 4]];
-                ControlModeDict.MAP = ClientState[oct[oct.length - 5]];
-                ControlModeDict.VISUALRECORDING = ClientState[oct[oct.length - 6]];
-                ControlModeDict.EXPANDMAP = ClientState[oct[oct.length - 7]];
-                console.log(ControlModeDict);
+                console.log("LSB--MSB ", data);
+                result = ClientControlModeDatagram.parse(data.swap32());
+                console.log("MSB--LSB ", data);
+                console.log(result);
+                for (const key in result) {
+                    if (key == "Unused") {
+                        continue;
+                    }
+                    const value = result[key];
+                    if (ClientState[value]) {
+                        result[key] = ClientState[value];
+                    } else {
+                        console.error(`No matching state found for ${value} in ClientState`);
+                    }
+                }
+                console.log(result);
             });
             break;
         default:
