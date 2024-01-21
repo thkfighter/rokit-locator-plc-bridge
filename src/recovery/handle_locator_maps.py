@@ -12,7 +12,7 @@ import sys
 import subprocess
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion.filesystem import ExecutableCompleter, PathCompleter
-from rokit.talk_to_rokit_locator import *
+from rokit_locator.talk_to_rokit_locator import *
 
 completer = PathCompleter()
 session = PromptSession()

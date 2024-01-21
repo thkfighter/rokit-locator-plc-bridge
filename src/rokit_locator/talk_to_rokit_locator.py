@@ -14,8 +14,8 @@ import time
 import logging
 import json
 import os
-
 import requests
+from construct import *
 
 
 # ClientLocalizationPoseDatagram data structure (see API manual)
@@ -312,6 +312,50 @@ def get_client_localization_pose(host, port):
             if client:
                 continue
             client = connect_socket(host, port)
+
+
+def get_client_sensor_laser(host, port):
+    ClientSensorLaserDatagram = Struct(
+        "scanNum" / Int16ul,
+        "time_start" / Float64l,
+        "uniqueId" / Int64ul,
+        "duration_beam" / Float64l,
+        "duration_scan" / Float64l,
+        "duration_rotate" / Float64l,
+        "numBeams" / Int32ul,
+        "angleStart" / Float32l,
+        "angleEnd" / Float32l,
+        "angleInc" / Float32l,
+        "minRange" / Float32l,
+        "maxRange" / Float32l,
+        "rangeArraySize" / Int32ul,
+        "ranges" / Array(this.rangeArraySize, Float32l),
+        "hasIntensities" / Int8ul,
+        "minIntensity" / Float32l,
+        "maxIntensity" / Float32l,
+        "intensityArraySize" / Int32ul,
+        "intensities" / Array(this.intensityArraySize, Float32l),
+    )
+    client = connect_socket(host, port)
+    while True:
+        try:
+            data = client.recv(4096)
+            # bufsize=2247 when rangeArraySize=541 and intensityArraySize=0
+            # TODO buffer size is not right
+            if not data:
+                continue
+            print(ClientSensorLaserDatagram.parse(data))
+        except struct.error as e:
+            logging.exception(e)
+        # except OSError as e:
+        except (TimeoutError, OSError) as e:
+            # logging.exception(e)
+            time.sleep(1)
+            if client:
+                continue
+            client = connect_socket(host, port)
+        except StreamError as e:
+            logging.exception(e)
 
 
 if __name__ == "__main__":
