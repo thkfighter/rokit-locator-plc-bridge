@@ -100,7 +100,9 @@ while True:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as c:
             # c.settimeout(5)
             c.connect((src_host, src_port))
-            logging.info(f"producer {c.getpeername()} --> {c.getsockname()}")
+            logging.info(
+                f"Successful connection: producer {c.getpeername()} --> {c.getsockname()}"
+            )
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 # s.settimeout(5)
                 # Avoid bind() exception: OSError: [Errno 48] Address already in use
@@ -109,7 +111,9 @@ while True:
                 s.listen(1)
                 conn, addr = s.accept()
                 with conn:
-                    logging.info(f"{s.getsockname()} --> consumer {addr}")
+                    logging.info(
+                        f"Successful connection: {s.getsockname()} --> consumer {addr}"
+                    )
                     count = 0
                     while True:
                         # size of pose payload is 188

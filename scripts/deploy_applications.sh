@@ -118,7 +118,7 @@ install_target()
     then
         cat > ${SERVICE_FILE} <<EOF
 [Unit]
-Description=set seed to initialize pose of ROKIT Locator client
+Description=setting seed to initialize pose of ROKIT Locator client
 After=network.target
 
 [Service]
@@ -133,7 +133,7 @@ EOF
     then
         cat > ${SERVICE_FILE} <<EOF
 [Unit]
-Description=works as a relay to retransmit poses at a specific frequency
+Description=broker that transponds poses at a decreased frequency
 After=network.target
 
 [Service]
