@@ -49,20 +49,10 @@ config = {
 }
 
 
-# Locator
-
 # ClientLocalizationPoseDatagram data structure (see API manual)
 UNPACKER = struct.Struct("<ddQiQQddddddddddddddQddd")
 id = 0
-# pose = {}
 sessionId = ""  # ROKIT Locator JSON RPC session ID
-
-# Siemens S7-1200
-# number of seeds stored in DB
-# Siemens S7 data block number
-# bytes that a row/seed resides
-# bytes that Pose2D resides in a row/seed
-# row/seed specification in a data block
 
 
 def readCurrentPoseFromLocator() -> dict:
@@ -129,7 +119,7 @@ def clientLocalizationSetSeed(
     logging.debug(payload)
 
     logging.info(f"x={x}, y={y}, a={a}")
-    response = requests.post(url=url, json=payload, headers=headers)
+    response = requests.post(url=url, json=payload)
     logging.debug(response.json())
 
 
@@ -145,7 +135,7 @@ def sessionLogin() -> str:
         "params": {
             "query": {
                 "timeout": {  # timeout, not timestamp
-                    "valid": True,
+                    "valid": False,
                     "time": 60,  # Integer64
                     "resolution": 1,  # real_time = time / resolution
                 },
@@ -166,10 +156,6 @@ def sessionLogin() -> str:
 
 def sessionLogout(sessionId: str = None):
     global id
-    # headers = {
-    #     "Content-Type": "application/json; charset=utf-8",
-    # }
-
     payload = {
         "id": id,
         "jsonrpc": "2.0",
@@ -178,7 +164,7 @@ def sessionLogout(sessionId: str = None):
     }
     id = id + 1
 
-    response = requests.post(url=url, json=payload, headers=headers)
+    response = requests.post(url=url, json=payload)
     logging.debug(response.json())
 
 
@@ -187,59 +173,31 @@ def run():
     client.connect(
         config["plc_host"], config["plc_rack"], config["plc_slot"], config["plc_port"]
     )
-    all_data_a = client.db_read(1, 0, config["row_size"] * config["seed_count"])
-    db1_a = snap7.util.DB(
+    all_data = client.upload(config["db_number"])
+    db = snap7.util.DB(
         db_number=config["db_number"],
-        bytearray_=all_data_a,
+        bytearray_=all_data,
         specification=config["layout"],
         row_size=config["row_size"],
         size=config["seed_count"],
     )
-    seed_a = db1_a.export()
+    seed_a = db.export()  # snapshot of the DB
 
     while True:
         time.sleep(0.5)
-
-        all_data_b = client.db_read(1, 0, config["row_size"] * config["seed_count"])
-        db1_b = snap7.util.DB(
-            db_number=config["db_number"],
-            bytearray_=all_data_b,
-            specification=config["layout"],
-            row_size=config["row_size"],
-            size=config["seed_count"],
-        )
-        seed_b = db1_b.export()
+        seed_b = db.export()  # snapshot of the DB
         for i in range(config["seed_count"]):
             if not seed_a[i]["recordSeed"] and seed_b[i]["recordSeed"]:
-                # # pose 0 in DB stores current pose
-                # # write pose 0 to pose i in the data block
-                # client.db_write(
-                #     db_number=1,
-                #     start=i*config["row_size"]+2,
-                #     data=all_data_b[2:2+config["pose_size"]]  # Pose2D in the data block
-                # )
-
                 # read current pose from Locator and write it to pose i in the data block
                 pose = readCurrentPoseFromLocator()
                 assert pose["localization_state"] >= 2, "NOT_LOCALIZED"
                 logging.info("LOCALIZED")
                 logging.info(pose)
-
-                pose_ba = struct.pack(">ddd", pose["x"], pose["y"], pose["yaw"])
-                client.db_write(
-                    db_number=config["db_number"],
-                    start=i * config["row_size"] + 2,
-                    # data=pose_ba+bytearray([0b00000000])
-                    data=pose_ba,
-                )
-
-                # reset recordSeed
-                client.db_write(
-                    db_number=config["db_number"],
-                    start=i * config["row_size"] + 2 + config["pose_size"],
-                    data=bytearray([0b00000000]),
-                )
-                # client.wait_as_completion(5000)
+                db[i]["x"] = pose["x"]
+                db[i]["y"] = pose["y"]
+                db[i]["yaw"] = pose["yaw"]
+                db[i]["recordSeed"] = False
+                db[i].write()
                 logging.info(f"Seed {i} recorded.")
                 break
             if not seed_a[i]["setSeed"] and seed_b[i]["setSeed"]:
@@ -251,26 +209,10 @@ def run():
                     uncertainSeed=seed_b[i]["uncertainSeed"],
                 )
                 logging.info(f"Seed {i} set.")
-
-                client.db_write(
-                    db_number=config["db_number"],
-                    start=i * config["row_size"] + 2 + config["pose_size"],
-                    data=bytearray([0b00000000]),
-                )
+                db[i]["setSeed"] = False
+                db[i].write()
                 break
         seed_a = seed_b
-
-
-def cancel(received_signal):
-    """
-    Callback method for signal handler
-    :param received_signal:     Interrupt Signal number
-    :param frame:               Stack frame object
-    """
-
-
-def recordSeed(station: int):
-    pass
 
 
 def setSeed(x, y, a, enforceSeed, uncertainSeed):
@@ -298,65 +240,8 @@ if __name__ == "__main__":
         type=str,
         help="Configuration file with path",
     )
-    # parser.add_argument(
-    #     "--seed_count", type=int, default=config["seed_count"], help="number of seeds"
-    # )
-    # parser.add_argument(
-    #     "--plc_address", type=str, default=config["plc_host"], help="IP address of PLC"
-    # )
-    # parser.add_argument(
-    #     "--plc_port", type=int, default=config["plc_port"], help="port of PLC"
-    # )
-    # parser.add_argument(
-    #     "--locator_host",
-    #     type=str,
-    #     default=config["locator_host"],
-    #     help="address of Locator",
-    # )
-    # parser.add_argument(
-    #     "--locator_binary_port",
-    #     type=int,
-    #     default=config["locator_pose_port"],
-    #     help="binary port of Locator",
-    # )
-    # parser.add_argument(
-    #     "--locator_json_rpc_port",
-    #     type=int,
-    #     default=config["locator_json_rpc_port"],
-    #     help="JSON RPC port of Locator",
-    # )
-    # parser.add_argument(
-    #     "--locator_user",
-    #     type=str,
-    #     default=config["user_name"],
-    #     help="Locator user name",
-    # )
-    # parser.add_argument(
-    #     "--locator_password",
-    #     type=str,
-    #     default=config["password"],
-    #     help="Locator user password",
-    # )
     parser.print_help()
-
     args = parser.parse_args()
-    # if args.seed_count:
-    #     config["seed_count"] = args.seed_count
-    # if args.plc_address:
-    #     config["plc_host"] = args.plc_address
-    # if args.plc_port:
-    #     r = range(1, 65535)
-    #     if args.plc_port not in r:
-    #         raise argparse.ArgumentTypeError("Value has to be between 1 and 65535")
-    #     config["plc_port"] = args.plc_port
-    # if args.locator_user:
-    #     config["user_name"] = args.locator_user
-    # if args.locator_password:
-    #     password = args.locator_password
-    # logging.info("PLC address: " + config["plc_host"])
-    # logging.info("PLC port: " + str(config["plc_port"]))
-    # logging.info("Locator host address: " + config["locator_host"])
-    # logging.info("Locator bianry port: " + str(config["locator_pose_port"]))
     if args.config:
         with open(args.config, "r") as f:
             config.update(json.load(f))
@@ -382,4 +267,3 @@ if __name__ == "__main__":
             logging.error(sys.exc_info())
             logging.exception(e)
             logging.error("Some exceptions arise. Restart run()...")
-        # finally:
