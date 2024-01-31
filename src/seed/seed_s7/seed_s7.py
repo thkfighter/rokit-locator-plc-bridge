@@ -200,18 +200,26 @@ def run():
                 assert pose["localization_state"] >= 2, "NOT_LOCALIZED"
                 logging.info("LOCALIZED")
                 logging.info(pose)
-                db[i]["x"] = pose["x"]
-                db[i]["y"] = pose["y"]
-                db[i]["yaw"] = pose["yaw"]
+                # These lines should work when the bug is fixed in python-snap7>1.3
+                # db[i]["x"] = pose["x"]
+                # db[i]["y"] = pose["y"]
+                # db[i]["yaw"] = pose["yaw"]
+                # write pose
+                buffer = struct.pack(">ddd", pose["x"], pose["y"], pose["yaw"])
+                client.db_write(
+                    db_number=config["db_number"],
+                    start=i * config["row_size"],
+                    data=buffer,
+                )
+                logging.info(f"Seed {i} recorded.")
                 db[i]["recordSeed"] = False
                 db[i].write(client)
-                logging.info(f"Seed {i} recorded.")
                 break
             if not seed_a[i]["setSeed"] and seed_b[i]["setSeed"]:
                 setSeed(
                     x=seed_b[i]["x"],
                     y=seed_b[i]["y"],
-                    a=seed_b[i]["a"],
+                    a=seed_b[i]["yaw"],
                     enforceSeed=seed_b[i]["enforceSeed"],
                     uncertainSeed=seed_b[i]["uncertainSeed"],
                 )
