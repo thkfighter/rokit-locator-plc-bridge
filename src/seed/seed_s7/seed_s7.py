@@ -173,7 +173,10 @@ def run():
     client.connect(
         config["plc_host"], config["plc_rack"], config["plc_slot"], config["plc_port"]
     )
-    all_data = client.upload(config["db_number"])
+    all_data = client.db_read(
+        config["db_number"], 0, config["row_size"] * config["seed_count"]
+    )
+    # all_data = client.upload(config["db_number"])
     db = snap7.util.DB(
         db_number=config["db_number"],
         bytearray_=all_data,
@@ -181,11 +184,15 @@ def run():
         row_size=config["row_size"],
         size=config["seed_count"],
     )
-    seed_a = db.export()  # snapshot of the DB
+    # db.read(client=client)
+    seed_a = db.export()  # returns an OrderedDict, a snapshot of the DB
+    logging.debug(seed_a)
 
     while True:
         time.sleep(0.5)
+        db.read(client=client)
         seed_b = db.export()  # snapshot of the DB
+        logging.debug(seed_b)
         for i in range(config["seed_count"]):
             if not seed_a[i]["recordSeed"] and seed_b[i]["recordSeed"]:
                 # read current pose from Locator and write it to pose i in the data block
@@ -197,7 +204,7 @@ def run():
                 db[i]["y"] = pose["y"]
                 db[i]["yaw"] = pose["yaw"]
                 db[i]["recordSeed"] = False
-                db[i].write()
+                db[i].write(client)
                 logging.info(f"Seed {i} recorded.")
                 break
             if not seed_a[i]["setSeed"] and seed_b[i]["setSeed"]:
@@ -210,7 +217,7 @@ def run():
                 )
                 logging.info(f"Seed {i} set.")
                 db[i]["setSeed"] = False
-                db[i].write()
+                db[i].write(client)
                 break
         seed_a = seed_b
 
@@ -254,7 +261,11 @@ if __name__ == "__main__":
         "http://" + config["locator_host"] + ":" + str(config["locator_json_rpc_port"])
     )
     format = "%(asctime)s - %(levelname)s - %(message)s"
-    logging.basicConfig(format=format, level=logging.INFO, datefmt="%Y-%m-%d %H:%M:%S")
+    logging.basicConfig(
+        format=format,
+        level=logging.DEBUG if config["debug"] else logging.INFO,
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
     while True:
         try:
