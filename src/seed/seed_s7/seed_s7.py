@@ -7,6 +7,7 @@
 #
 
 import socket
+import os
 import sys
 import struct
 import argparse
@@ -118,7 +119,7 @@ def clientLocalizationSetSeed(
     id = id + 1
     logging.debug(payload)
 
-    logging.info(f"x={x}, y={y}, a={a}")
+    logging.info(payload["params"]["query"])
     response = requests.post(url=url, json=payload)
     logging.debug(response.json())
 
@@ -173,10 +174,12 @@ def run():
     client.connect(
         config["plc_host"], config["plc_rack"], config["plc_slot"], config["plc_port"]
     )
+    if client.get_connected():
+        logging.info("Connected to PLC")
     all_data = client.db_read(
         config["db_number"], 0, config["row_size"] * config["seed_count"]
     )
-    # all_data = client.upload(config["db_number"])
+    # all_data = client.upload(config["db_number"])  # Function not available
     db = snap7.util.DB(
         db_number=config["db_number"],
         bytearray_=all_data,
@@ -200,7 +203,7 @@ def run():
                 assert pose["localization_state"] >= 2, "NOT_LOCALIZED"
                 logging.info("LOCALIZED")
                 logging.info(pose)
-                # These lines should work when the bug is fixed in python-snap7>1.3
+                # TODO1 These lines should work when the bug is fixed in python-snap7>1.3
                 # db[i]["x"] = pose["x"]
                 # db[i]["y"] = pose["y"]
                 # db[i]["yaw"] = pose["yaw"]
@@ -212,6 +215,7 @@ def run():
                     data=buffer,
                 )
                 logging.info(f"Seed {i} recorded.")
+                db.read(client)  # TODO1 delete this line
                 db[i]["recordSeed"] = False
                 db[i].write(client)
                 break
@@ -232,7 +236,7 @@ def run():
 
 def setSeed(x, y, a, enforceSeed, uncertainSeed):
     sessionId = sessionLogin()
-    logging.info(sessionId)
+    logging.debug(sessionId)
     clientLocalizationSetSeed(
         sessionId=sessionId,
         x=x,
@@ -268,7 +272,12 @@ if __name__ == "__main__":
     url = (
         "http://" + config["locator_host"] + ":" + str(config["locator_json_rpc_port"])
     )
-    format = "%(asctime)s - %(levelname)s - %(message)s"
+    # if run as a Linux systemd service
+    is_systemd = os.environ.get("INVOCATION_ID") is not None  # None on Windows
+    if is_systemd:
+        format = "%(levelname)s - %(message)s"
+    else:
+        format = "%(asctime)s - %(levelname)s - %(message)s"
     logging.basicConfig(
         format=format,
         level=logging.DEBUG if config["debug"] else logging.INFO,
