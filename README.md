@@ -231,3 +231,10 @@ pymodbus.console tcp --host localhost --port 5020
   ```bash
   node app.js
   ```
+
+# 7 Examples
+
+Get laser scans. Module talk_to_rokit_locator is imported into get_laser_datagram.py.
+```bash
+python path/to/get_laser_datagram.py --password <Locator password> --locator_host <IP address> --laser_output_port 9021
+```

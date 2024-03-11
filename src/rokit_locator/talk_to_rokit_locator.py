@@ -16,6 +16,7 @@ import json
 import os
 import requests
 from construct import *
+from pprint import pprint
 
 
 # ClientLocalizationPoseDatagram data structure (see API manual)
@@ -148,6 +149,28 @@ def supportRecoveryFrom(url, payload, sessionId, recoveryName):
     payload["id"] = id
     payload["method"] = "supportRecoveryFrom"
     payload["params"]["query"] = {"sessionId": sessionId, "recoveryName": recoveryName}
+    id = id + 1
+    response = requests.post(url=url, json=payload)
+    logging.debug(response.json())
+    return response.json()
+
+
+def clientSensorLaserOutputStart(url, payload, sessionId):
+    global id
+    payload["id"] = id
+    payload["method"] = "clientSensorLaserOutputStart"
+    payload["params"]["query"] = {"sessionId": sessionId}
+    id = id + 1
+    response = requests.post(url=url, json=payload)
+    logging.debug(response.json())
+    return response.json()
+
+
+def clientSensorGetLaserScan(url, payload, sessionId):
+    global id
+    payload["id"] = id
+    payload["method"] = "clientSensorGetLaserScan"
+    payload["params"]["query"] = {"sessionId": sessionId, "laserIndex": 0}
     id = id + 1
     response = requests.post(url=url, json=payload)
     logging.debug(response.json())
@@ -314,7 +337,9 @@ def get_client_localization_pose(host, port):
             client = connect_socket(host, port)
 
 
-def get_client_sensor_laser(host, port):
+def get_client_sensor_laser(
+    host, port, count_beams, has_intensities: bool = True, is_cyclic: bool = True
+):
     ClientSensorLaserDatagram = Struct(
         "scanNum" / Int16ul,
         "time_start" / Float64l,
@@ -336,15 +361,29 @@ def get_client_sensor_laser(host, port):
         "intensityArraySize" / Int32ul,
         "intensities" / Array(this.intensityArraySize, Float32l),
     )
+    if has_intensities:
+        buffer_size = 83 + (4 + 4) * count_beams
+    else:
+        buffer_size = 83 + 4 * count_beams
     client = connect_socket(host, port)
-    while True:
+    data = client.recv(1024)
+    while len(data) < buffer_size:  # Continue reading while data is still available
+        data += client.recv(1024)
+    pprint(dict(ClientSensorLaserDatagram.parse(data)), indent=4, sort_dicts=False)
+
+    while is_cyclic:
         try:
-            data = client.recv(4096)
+            data = client.recv(1024)
             # bufsize=2247 when rangeArraySize=541 and intensityArraySize=0
-            # TODO buffer size is not right
             if not data:
                 continue
-            print(ClientSensorLaserDatagram.parse(data))
+            while (
+                len(data) < buffer_size
+            ):  # Continue reading while data is still available
+                data += client.recv(1024)
+            pprint(
+                dict(ClientSensorLaserDatagram.parse(data)), indent=4, sort_dicts=False
+            )
         except struct.error as e:
             logging.exception(e)
         # except OSError as e:
