@@ -210,7 +210,7 @@ def update_seed_0(host, port, address, byte_order, word_order):
                     assert mb_set_pose(
                         client, address, pose_b, byte_order, word_order
                     ), "Could not update pose of seed 0."
-                    logging.info(
+                    logging.debug(
                         f"seed 0 updated, x={pose_b['x']}, y={pose_b['y']}, yaw={pose_b['yaw']}"
                     )
                     pose_a = pose_b
